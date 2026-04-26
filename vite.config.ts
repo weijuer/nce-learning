@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -7,4 +7,8 @@ export default defineConfig({
   server: {
     // OPFS 和 Worker 要求安全上下文，localhost 自动满足
   },
-})
+  base: "/nce-learning/",
+  build: {
+    target: "es2023",
+  },
+});

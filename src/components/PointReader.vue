@@ -2,9 +2,11 @@
   <div class="point-reader">
     <div class="header">
       <button class="btn" @click="handlePlayPause" :disabled="!audioReady">
-        {{ isPlaying ? '⏸️ 暂停' : '▶️ 播放' }}
+        {{ isPlaying ? "⏸️ 暂停" : "▶️ 播放" }}
       </button>
-      <span class="time-info">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+      <span class="time-info"
+        >{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span
+      >
       <button class="btn btn-small" @click="clearCache" :disabled="isLoading">
         🗑️ 清除缓存
       </button>
@@ -13,7 +15,11 @@
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="isLoading" class="loading">加载资源中，请稍候...</div>
 
-    <div class="subtitle-container" ref="subtitleContainer" v-show="lrcLines.length > 0">
+    <div
+      class="subtitle-container"
+      ref="subtitleContainer"
+      v-show="lrcLines.length > 0"
+    >
       <div
         v-for="(line, index) in lrcLines"
         :key="index"
@@ -29,158 +35,174 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { useOPFS } from '../composables/useOPFS'
-import { useAudio } from '../composables/useAudio'
-import { parseBilingualLRC } from '../utils/lrc-parser'
-import type { LRCLine } from '../types'
+import { ref, onMounted, onUnmounted } from "vue";
+import { useOPFS } from "../composables/useOPFS";
+import { useAudio } from "../composables/useAudio";
+import { parseBilingualLRC } from "../utils/lrc-parser";
+import type { LRCLine } from "../types";
 
 interface ResourceUrls {
-  mp3: string
-  lrc: string
+  mp3: string;
+  lrc: string;
 }
 
 interface ResourcePaths {
-  mp3: string
-  lrc: string
+  mp3: string;
+  lrc: string;
 }
 
 // 默认课程资源（新概念英语第一册第一课）
 const RESOURCE_URLS: ResourceUrls = {
-  mp3: 'https://raw.githubusercontent.com/tangx/New-Concept-English/master/%E6%96%B0%E6%A6%82%E5%BF%B5%E8%8B%B1%E8%AF%AD%EF%BC%88%E4%B8%80%EF%BC%89MP3/%E7%AC%AC%E4%B8%80%E6%AC%A1-01.mp3',
-  lrc: 'https://raw.githubusercontent.com/tangx/New-Concept-English/master/%E6%96%B0%E6%A6%82%E5%BF%B5%E8%8B%B1%E8%AF%AD%EF%BC%88%E4%B8%80%EF%BC%89%E5%90%8C%E6%AD%A5%E5%AD%97%E5%B9%95/Lesson%201.lrc'
-}
+  mp3: "data/NCE1/001&002－Excuse Me.mp3",
+  lrc: "data/NCE1/001&002－Excuse Me.lrc",
+};
 
 const RESOURCE_PATHS: ResourcePaths = {
-  mp3: 'nce/lesson1.mp3',
-  lrc: 'nce/lesson1.lrc'
-}
+  mp3: "001&002－Excuse Me.mp3",
+  lrc: "001&002－Excuse Me.lrc",
+};
 
-const { cacheFile, readFile, fileExists, deleteFile } = useOPFS()
-const { isPlaying, duration, loadFromBuffer, play, pause, resume, seek, getCurrentTime, destroy } = useAudio()
+const { cacheFile, readFile, fileExists, deleteFile } = useOPFS();
+const {
+  isPlaying,
+  duration,
+  loadFromBuffer,
+  play,
+  pause,
+  resume,
+  seek,
+  getCurrentTime,
+  destroy,
+} = useAudio();
 
-const lrcLines = ref<LRCLine[]>([])
-const currentLineIndex = ref(-1)
-const currentTime = ref(0)
-const isLoading = ref(true)
-const audioReady = ref(false)
-const error = ref('')
+const lrcLines = ref<LRCLine[]>([]);
+const currentLineIndex = ref(-1);
+const currentTime = ref(0);
+const isLoading = ref(true);
+const audioReady = ref(false);
+const error = ref("");
 
-const subtitleContainer = ref<HTMLElement | null>(null)
-let animationId = 0
+const subtitleContainer = ref<HTMLElement | null>(null);
+let animationId = 0;
 
 onMounted(async () => {
   try {
-    await loadResources()
-    await initAudio()
-    audioReady.value = true
+    await loadResources();
+    await initAudio();
+    audioReady.value = true;
   } catch (e: any) {
-    error.value = '资源加载失败：' + e.message
-    console.error(e)
+    error.value = "资源加载失败：" + e.message;
+    console.error(e);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
-  startTimeUpdateLoop()
-})
+  startTimeUpdateLoop();
+});
 
 onUnmounted(() => {
-  cancelAnimationFrame(animationId)
-  destroy()
-})
+  cancelAnimationFrame(animationId);
+  destroy();
+});
 
 async function loadResources(): Promise<void> {
   try {
     // 检查并缓存 MP3
-    const mp3Exists = await fileExists(RESOURCE_PATHS.mp3)
+    const mp3Exists = await fileExists(RESOURCE_PATHS.mp3);
     if (!mp3Exists) {
-      console.log('正在下载音频文件...')
-      const response = await fetch(RESOURCE_URLS.mp3)
-      if (!response.ok) throw new Error(`音频下载失败 (${response.status})`)
-      const buffer = await response.arrayBuffer()
-      await cacheFile(RESOURCE_PATHS.mp3, buffer)
-      console.log('音频已缓存')
+      console.log("正在下载音频文件...");
+      const response = await fetch(RESOURCE_URLS.mp3);
+      if (!response.ok) throw new Error(`音频下载失败 (${response.status})`);
+      const buffer = await response.arrayBuffer();
+      await cacheFile(RESOURCE_PATHS.mp3, buffer);
+      console.log("音频已缓存");
     }
 
     // 检查并缓存 LRC
-    const lrcExists = await fileExists(RESOURCE_PATHS.lrc)
+    const lrcExists = await fileExists(RESOURCE_PATHS.lrc);
     if (!lrcExists) {
-      console.log('正在下载歌词文件...')
-      const response = await fetch(RESOURCE_URLS.lrc)
-      if (!response.ok) throw new Error(`歌词下载失败 (${response.status})`)
-      const buffer = await response.arrayBuffer()
-      await cacheFile(RESOURCE_PATHS.lrc, buffer)
-      console.log('歌词已缓存')
+      console.log("正在下载歌词文件...");
+      const response = await fetch(RESOURCE_URLS.lrc);
+      if (!response.ok) throw new Error(`歌词下载失败 (${response.status})`);
+      const buffer = await response.arrayBuffer();
+      await cacheFile(RESOURCE_PATHS.lrc, buffer);
+      console.log("歌词已缓存");
     }
 
     // 读取歌词并解析
-    const lrcBuffer = await readFile(RESOURCE_PATHS.lrc)
-    const decoder = new TextDecoder('utf-8')
-    const lrcText = decoder.decode(lrcBuffer)
-    lrcLines.value = parseBilingualLRC(lrcText)
+    const lrcBuffer = await readFile(RESOURCE_PATHS.lrc);
+    const decoder = new TextDecoder("utf-8");
+    const lrcText = decoder.decode(lrcBuffer);
+    lrcLines.value = parseBilingualLRC(lrcText);
   } catch (err) {
-    console.error('资源加载失败:', err)
-    throw new Error(`资源加载失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    console.error("资源加载失败:", err);
+    throw new Error(
+      `资源加载失败: ${err instanceof Error ? err.message : "未知错误"}`,
+    );
   }
 }
 
 async function initAudio(): Promise<void> {
   try {
-    const mp3Buffer = await readFile(RESOURCE_PATHS.mp3)
-    await loadFromBuffer(mp3Buffer)
+    const mp3Buffer = await readFile(RESOURCE_PATHS.mp3);
+    await loadFromBuffer(mp3Buffer);
   } catch (err) {
-    console.error('音频初始化失败:', err)
-    throw new Error(`音频初始化失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    console.error("音频初始化失败:", err);
+    throw new Error(
+      `音频初始化失败: ${err instanceof Error ? err.message : "未知错误"}`,
+    );
   }
 }
 
 function handlePlayPause() {
-  if (!audioReady.value) return
+  if (!audioReady.value) return;
   if (isPlaying.value) {
-    pause()
+    pause();
   } else {
     // 如果当前不播放，从当前位置继续，若位置为0则从头开始
-    resume()
+    resume();
   }
 }
 
 function handleLineClick(line: LRCLine): void {
-  if (!audioReady.value) return
-  
-  seek(line.time)
+  if (!audioReady.value) return;
+
+  seek(line.time);
   if (!isPlaying.value) {
     // 手动触发播放（需要用户手势，这里已在点击事件中）
-    play(line.time)
+    play(line.time);
   }
 }
 
 function startTimeUpdateLoop(): void {
   function update(): void {
-    if (!audioReady.value) return
-    
-    currentTime.value = getCurrentTime()
+    if (!audioReady.value) return;
+
+    currentTime.value = getCurrentTime();
     // 同步高亮行
-    const idx = lrcLines.value.findLastIndex(line => line.time <= currentTime.value)
-    currentLineIndex.value = idx
-    animationId = requestAnimationFrame(update)
+    const idx = lrcLines.value.findLastIndex(
+      (line: LRCLine) => line.time <= currentTime.value,
+    );
+    currentLineIndex.value = idx;
+    animationId = requestAnimationFrame(update);
   }
-  update()
+  update();
 }
 
 function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }
 
 async function clearCache(): Promise<void> {
   try {
-    await deleteFile(RESOURCE_PATHS.mp3)
-    await deleteFile(RESOURCE_PATHS.lrc)
-    error.value = '缓存已清除，刷新页面重新下载。'
-    audioReady.value = false
+    await deleteFile(RESOURCE_PATHS.mp3);
+    await deleteFile(RESOURCE_PATHS.lrc);
+    error.value = "缓存已清除，刷新页面重新下载。";
+    audioReady.value = false;
   } catch (err) {
-    console.error('清除缓存失败:', err)
-    error.value = `清除缓存失败：${err instanceof Error ? err.message : '未知错误'}`
+    console.error("清除缓存失败:", err);
+    error.value = `清除缓存失败：${err instanceof Error ? err.message : "未知错误"}`;
   }
 }
 </script>
@@ -225,7 +247,8 @@ async function clearCache(): Promise<void> {
   color: var(--secondary-text);
   min-width: 100px;
 }
-.loading, .error {
+.loading,
+.error {
   padding: 1rem;
   text-align: center;
   color: var(--secondary-text);
@@ -236,11 +259,14 @@ async function clearCache(): Promise<void> {
   border-radius: 8px;
 }
 .subtitle-container {
+  display: flex;
+  gap: 1rem;
   max-height: 60vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 0.5rem 0;
+  flex-direction: column;
 }
 .lyric-line {
   padding: 0.7rem 1.2rem;

@@ -1,13 +1,12 @@
 <template>
-  <div class="app">
-    <h1 class="title">📖 新概念英语点读</h1>
-    <PointReader />
-  </div>
+  <router-view v-slot="{ Component }">
+    <transition name="fade">
+      <component :is="Component" />
+    </transition>
+  </router-view>
 </template>
 
-<script setup lang="ts">
-import PointReader from './components/PointReader.vue'
-</script>
+<script setup lang="ts"></script>
 
 <style scoped>
 .app {
