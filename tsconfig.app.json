@@ -4,6 +4,12 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "types": ["vite/client"],
     "lib": ["ESNext", "ESNext.Intl", "DOM", "DOM.Iterable", "WebWorker"],
+    "skipLibCheck": true,
+    "paths": {
+      "@w-design/components": ["../w-design/packages/components"],
+      "@w-design/components/*": ["../w-design/packages/components/*"],
+      "w-design-vue": ["../w-design/packages/design-vue"]
+    },
 
     /* Linting */
     "noUnusedLocals": true,

@@ -1,0 +1,3 @@
+overrides:
+  w-design-vue: link:../w-design/packages/design-vue
+  '@w-design/*': link:../w-design/packages/*

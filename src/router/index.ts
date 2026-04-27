@@ -10,7 +10,8 @@ const routes = [
   {
     path: "/:version",
     name: "book",
-    component: () => import(/* webpackChunkName: "book" */ "../views/Book.vue"),
+    component: () => import('../components/layouts/Layout.vue'),
+    // component: () => import(/* webpackChunkName: "book" */ "../views/Book.vue"),
   },
   {
     path: "/:version/:name",
