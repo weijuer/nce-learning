@@ -6,6 +6,17 @@
     "lib": ["ESNext", "ESNext.Intl", "DOM", "DOM.Iterable", "WebWorker"],
     "skipLibCheck": true,
     "paths": {
+      "@/*": ["./src/*"],
+      "Api": ["./src/api"],
+      "Utils/*": ["./src/utils/*"],
+      "Hooks": ["./src/hooks"],
+      "Stores": ["./src/stores"],
+      "Services": ["./src/services"],
+      "Views": ["./src/views"],
+      "Layouts": ["./src/components/layouts"],
+      "Icons": ["./src/components/icons"],
+      "Widgets": ["./src/components/widgets"],
+      "Styles": ["./src/styles"],
       "@w-design/components": ["../w-design/packages/components"],
       "@w-design/components/*": ["../w-design/packages/components/*"],
       "w-design-vue": ["../w-design/packages/design-vue"]
