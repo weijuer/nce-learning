@@ -1,9 +1,17 @@
-<script name="Home" setup lang="ts">
-import { WHeader, WLayout, WMain, WTabs, WTab } from 'w-design-vue'
-</script>
+<script name="Home" setup lang="ts"></script>
 
 <template>
-  <div class="Home">简约 · 高效 · 专注</div>
+  <div class="home">
+    <header class="page-hero">
+      <h1>NCE Learning</h1>
+      <p>Simple · Efficient · Focus</p>
+    </header>
+  </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.home {
+  place-content: center;
+  height: 70%;
+}
+</style>

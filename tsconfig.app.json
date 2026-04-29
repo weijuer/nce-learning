@@ -17,6 +17,7 @@
       "Icons": ["./src/components/icons"],
       "Widgets": ["./src/components/widgets"],
       "Styles": ["./src/styles"],
+      "/nce.json?url&raw": ["./public/nce.json"],
       "@w-design/components": ["../w-design/packages/components"],
       "@w-design/components/*": ["../w-design/packages/components/*"],
       "w-design-vue": ["../w-design/packages/design-vue"]

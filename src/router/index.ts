@@ -15,20 +15,21 @@ const routes = [
       {
         path: '/books',
         name: 'book',
-        component: () => import(/* webpackChunkName: "book" */ '../views/Book.vue')
+        component: () => import(/* webpackChunkName: "book" */ '../views/Book.vue'),
+        children: []
       },
       {
-        path: '/:version/:name',
+        path: '/books/:version/:name',
         name: 'lesson',
         component: () => import(/* webpackChunkName: "lesson" */ '../views/Lesson.vue'),
         props: true
+      },
+      {
+        path: '/about',
+        name: 'About',
+        component: () => import(/* webpackChunkName: "about" */ '../views/About.vue')
       }
     ]
-  },
-  {
-    path: '/about',
-    name: 'About',
-    component: () => import(/* webpackChunkName: "about" */ '../views/About.vue')
   },
   {
     name: 'NotFound',

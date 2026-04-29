@@ -1,9 +1,4 @@
-// 读取NCE数据并返回json格式
-
-const modules = import.meta.glob(['/public/data/**/*.mp3', '/public/data/**/*.lrc'], {
-  import: 'default',
-  eager: true
-})
+import NCE_JSON_SOURCE from '/nce.json?url&raw'
 
 interface NCELesson {
   name: string
@@ -16,6 +11,13 @@ interface NCEData {
 
 export const generateNCEJson = (): NCEData => {
   const nceData: NCEData = {}
+
+  // 读取NCE数据并返回json格式
+  const modules = import.meta.glob(['/data/**/*.mp3', '/data/**/*.lrc'], {
+    import: 'default',
+    eager: true,
+    query: '?url'
+  })
 
   for (const path in modules) {
     if (path.endsWith('.mp3')) {
@@ -55,4 +57,4 @@ export const generateNCEJson = (): NCEData => {
   return nceData
 }
 
-export const NCE_JSON = generateNCEJson()
+export const NCE_JSON = JSON.parse(NCE_JSON_SOURCE as unknown as string)
