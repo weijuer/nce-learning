@@ -3,7 +3,7 @@
     <!-- 音频控制区域 -->
     <div class="audio-controls">
       <!-- 播放/暂停按钮 -->
-      <button class="play-pause-btn" @click="togglePlay" :disabled="!audioSrc">
+      <button class="play-pause-btn" @click="togglePlay" :disabled="internalDuration === 0">
         <svg v-if="!isPlaying" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z" />
         </svg>
@@ -15,7 +15,7 @@
       <!-- 进度条和时间显示 -->
       <div class="progress-section">
         <!-- 当前时间 -->
-        <span class="time current-time">{{ formatTime(currentTime) }}</span>
+        <span class="time current-time">{{ formatTime(internalCurrentTime) }}</span>
 
         <!-- 进度条 -->
         <div class="progress-bar-container" @click="seekToPosition">
@@ -30,7 +30,7 @@
         </div>
 
         <!-- 总时间 -->
-        <span class="time total-time">{{ formatTime(duration) }}</span>
+        <span class="time total-time">{{ formatTime(internalDuration) }}</span>
       </div>
 
       <!-- 音量控制 -->
@@ -72,73 +72,84 @@
         </div>
       </div>
     </div>
-
-    <!-- 音频元素 -->
-    <audio
-      ref="audioElement"
-      :src="audioSrc"
-      @loadedmetadata="onLoadedMetadata"
-      @timeupdate="onTimeUpdate"
-      @ended="onEnded"
-      @canplay="onCanPlay"
-    ></audio>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { formatTime } from 'Utils/common'
 
 interface Props {
-  audioSrc?: string
   autoPlay?: boolean
+  isPlaying?: boolean
+  currentTime?: number
+  duration?: number
+}
+
+interface Emits {
+  (e: 'update:isPlaying', value: boolean): void
+  (e: 'update:currentTime', value: number): void
+  (e: 'seek', time: number): void
+  (e: 'play'): void
+  (e: 'pause'): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  audioSrc: '',
-  autoPlay: false
+  autoPlay: false,
+  isPlaying: false,
+  currentTime: 0,
+  duration: 0
 })
 
-// 音频元素引用
-const audioElement = ref<HTMLAudioElement>()
+const emit = defineEmits<Emits>()
 
 // 响应式状态
-const isPlaying = ref(false)
-const currentTime = ref(0)
-const duration = ref(0)
+const internalIsPlaying = ref(props.isPlaying)
+const internalCurrentTime = ref(props.currentTime)
+const internalDuration = ref(props.duration)
 const volume = ref(0.7)
 const isMuted = ref(false)
 const isDragging = ref(false)
 
-// 计算属性
-const progressPercentage = computed(() => {
-  if (duration.value === 0) return 0
-  return (currentTime.value / duration.value) * 100
-})
-
-// 监听音频源变化
+// 同步外部状态
 watch(
-  () => props.audioSrc,
-  newSrc => {
-    if (newSrc && audioElement.value) {
-      audioElement.value.load()
-      if (props.autoPlay) {
-        audioElement.value.play()
-      }
+  () => props.isPlaying,
+  newVal => {
+    internalIsPlaying.value = newVal
+  }
+)
+
+watch(
+  () => props.currentTime,
+  newVal => {
+    if (!isDragging.value) {
+      internalCurrentTime.value = newVal
     }
   }
 )
 
+watch(
+  () => props.duration,
+  newVal => {
+    internalDuration.value = newVal
+  }
+)
+
+// 计算属性
+const progressPercentage = computed(() => {
+  if (internalDuration.value === 0) return 0
+  return (internalCurrentTime.value / internalDuration.value) * 100
+})
+
 // 播放/暂停切换
 const togglePlay = async () => {
-  if (!audioElement.value) return
-
   try {
-    if (isPlaying.value) {
-      audioElement.value.pause()
+    if (internalIsPlaying.value) {
+      emit('pause')
     } else {
-      await audioElement.value.play()
+      emit('play')
     }
-    isPlaying.value = !isPlaying.value
+    internalIsPlaying.value = !internalIsPlaying.value
   } catch (error) {
     console.error('播放失败:', error)
   }
@@ -146,43 +157,37 @@ const togglePlay = async () => {
 
 // 静音切换
 const toggleMute = () => {
-  if (!audioElement.value) return
-
   isMuted.value = !isMuted.value
-  audioElement.value.muted = isMuted.value
 }
 
 // 设置音量
 const setVolume = (event: MouseEvent) => {
-  if (!audioElement.value) return
-
   const slider = event.currentTarget as HTMLElement
   const rect = slider.getBoundingClientRect()
   const clickX = event.clientX - rect.left
   const newVolume = Math.max(0, Math.min(1, clickX / rect.width))
 
   volume.value = newVolume
-  audioElement.value.volume = newVolume
 
   // 如果之前是静音状态，取消静音
   if (isMuted.value && newVolume > 0) {
     isMuted.value = false
-    audioElement.value.muted = false
   }
 }
 
 // 进度条点击跳转
 const seekToPosition = (event: MouseEvent) => {
-  if (!audioElement.value || duration.value === 0) return
+  if (internalDuration.value === 0) return
 
   const progressBar = event.currentTarget as HTMLElement
   const rect = progressBar.getBoundingClientRect()
   const clickX = event.clientX - rect.left
   const percentage = clickX / rect.width
-  const newTime = percentage * duration.value
+  const newTime = percentage * internalDuration.value
 
-  audioElement.value.currentTime = newTime
-  currentTime.value = newTime
+  internalCurrentTime.value = newTime
+  emit('update:currentTime', newTime)
+  emit('seek', newTime)
 }
 
 // 开始拖拽进度条
@@ -191,71 +196,28 @@ const startDragging = (event: MouseEvent) => {
   isDragging.value = true
 
   const onMouseMove = (moveEvent: MouseEvent) => {
-    if (!isDragging.value || !audioElement.value) return
+    if (!isDragging.value) return
 
     const progressBar = document.querySelector('.progress-bar-container') as HTMLElement
     const rect = progressBar.getBoundingClientRect()
     const clickX = Math.max(0, Math.min(rect.width, moveEvent.clientX - rect.left))
     const percentage = clickX / rect.width
-    const newTime = percentage * duration.value
+    const newTime = percentage * internalDuration.value
 
-    audioElement.value.currentTime = newTime
-    currentTime.value = newTime
+    internalCurrentTime.value = newTime
+    emit('update:currentTime', newTime)
   }
 
   const onMouseUp = () => {
     isDragging.value = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    emit('seek', internalCurrentTime.value)
   }
 
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
 }
-
-// 格式化时间显示 (mm:ss)
-const formatTime = (time: number): string => {
-  const minutes = Math.floor(time / 60)
-  const seconds = Math.floor(time % 60)
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-}
-
-// 音频事件处理
-const onLoadedMetadata = () => {
-  if (audioElement.value) {
-    duration.value = audioElement.value.duration
-  }
-}
-
-const onTimeUpdate = () => {
-  if (audioElement.value && !isDragging.value) {
-    currentTime.value = audioElement.value.currentTime
-  }
-}
-
-const onEnded = () => {
-  isPlaying.value = false
-  currentTime.value = 0
-}
-
-const onCanPlay = () => {
-  // 音频可以播放时的处理
-}
-
-// 组件挂载时初始化音量
-onMounted(() => {
-  if (audioElement.value) {
-    audioElement.value.volume = volume.value
-  }
-})
-
-// 组件卸载时清理
-onUnmounted(() => {
-  if (audioElement.value) {
-    audioElement.value.pause()
-    audioElement.value.currentTime = 0
-  }
-})
 </script>
 
 <style scoped>
@@ -369,6 +331,9 @@ onUnmounted(() => {
 }
 
 .volume-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   color: var(--text-secondary);

@@ -2,6 +2,7 @@ import { ref, shallowRef, type Ref } from 'vue'
 
 export interface AudioControls {
   isPlaying: Ref<boolean>
+  currentTimeOffset: Ref<number>
   duration: Ref<number>
   loadFromBuffer: (buffer: ArrayBuffer) => Promise<void>
   play: (fromTime?: number) => void
@@ -18,9 +19,9 @@ export function useAudio(): AudioControls {
   const audioBuffer = shallowRef<AudioBuffer | null>(null)
   const sourceNode = shallowRef<AudioBufferSourceNode | null>(null)
   const isPlaying = ref(false)
-  const currentTimeOffset = ref(0)   // 当前播放偏移量（秒）
-  const startedAt = ref(0)          // context.currentTime 开始时间
-  const duration = ref(0)           // 总时长（秒）
+  const currentTimeOffset = ref(0) // 当前播放偏移量（秒）
+  const startedAt = ref(0) // context.currentTime 开始时间
+  const duration = ref(0) // 总时长（秒）
 
   function getContext(): AudioContext {
     if (!audioContext.value) {
@@ -113,7 +114,9 @@ export function useAudio(): AudioControls {
   function stopCurrentSource(): void {
     try {
       sourceNode.value?.stop()
-    } catch { /* 忽略已停止的错误 */ }
+    } catch {
+      /* 忽略已停止的错误 */
+    }
     sourceNode.value = null
   }
 
@@ -126,6 +129,7 @@ export function useAudio(): AudioControls {
 
   return {
     isPlaying,
+    currentTimeOffset,
     duration,
     loadFromBuffer,
     play,

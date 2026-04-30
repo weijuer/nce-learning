@@ -22,12 +22,13 @@ export default defineConfig({
       Stores: resolve('src/stores'),
       Router: resolve('src/router'),
       Locales: resolve('src/locales'),
-      Hooks: resolve('src/hooks'),
+      Composables: resolve('src/composables'),
       Views: resolve('src/views'),
       Components: resolve('src/components'),
       Layouts: resolve('src/components/layouts'),
       Widgets: resolve('src/components/widgets'),
-      Styles: resolve('src/styles')
+      Styles: resolve('src/styles'),
+      Types: resolve('src/types')
     }
   },
   server: {

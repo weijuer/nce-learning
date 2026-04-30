@@ -1,6 +1,6 @@
 <script name="Lesson" setup lang="ts">
 import { computed } from 'vue'
-import Player from '@/components/Player.vue'
+import { Player } from 'Widgets'
 
 const props = defineProps({
   name: {
