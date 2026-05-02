@@ -28,7 +28,11 @@
     <div v-if="!isLoading && !error" class="player-content">
       <!-- 歌词显示区域 -->
       <section class="lyrics-section">
-        <Lyrics :lrc-lines="lrcLines" :current-line-index="currentLineIndex" />
+        <Lyrics
+          :lrc-lines="lrcLines"
+          :current-line-index="currentLineIndex"
+          @line-click="handleLineClick"
+        />
       </section>
 
       <!-- 音频控制区域 -->
@@ -40,6 +44,7 @@
           @seek="seek"
           @play="play"
           @pause="pause"
+          @resume="resume"
         />
       </section>
     </div>
@@ -71,9 +76,13 @@ const {
   currentLineIndex,
   play,
   pause,
+  resume,
   seek
 } = usePlayer(props)
 
+const handleLineClick = (line: any) => {
+  seek(line.time)
+}
 const error = ref('')
 </script>
 
@@ -221,8 +230,13 @@ const error = ref('')
 // 主内容区域
 .player-content {
   max-width: 800px;
-  margin: 0 auto;
-  padding: var(--spacing-lg);
+  margin: auto;
+
+  .audio-section {
+    margin-top: var(--spacing-xl);
+    position: sticky;
+    bottom: 1%;
+  }
 }
 
 // 头部信息栏

@@ -31,7 +31,6 @@ const goLesson = (name: string, version: string | number) => {
         :title="folderName"
         :name="folderName"
       >
-        {{ folderName }}
         <div class="lesssons">
           <div
             v-for="(course, courseName) in folder"

@@ -162,7 +162,7 @@
   left: 0;
   right: 0;
   z-index: var(--z-nav);
-  background: #ffffffd9;
+  background: light-dark(#ffffffd9, #000000d9);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
   transition:
@@ -187,9 +187,9 @@
 
   padding: 14px 2px;
   min-height: var(--w-footer-height);
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--color-text);
   font-size: 14px;
-  background: #f0f2f5;
+  background: light-dark(#ffffffd9, #000000d9);
 }
 
 .split-navigation {

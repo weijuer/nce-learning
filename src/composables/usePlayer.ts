@@ -1,14 +1,8 @@
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, shallowRef } from 'vue'
 import type { Ref } from 'vue'
 import { useOPFS } from './useOPFS'
-import { useAudio } from './useAudio'
 import { parseBilingualLRC } from '../utils/lrc-parser'
 import type { LRCLine } from '../types'
-
-interface PlayerProps {
-  name?: string
-  version?: string
-}
 
 /**
  * 音频播放器状态枚举
@@ -24,6 +18,11 @@ export const PlayerState = {
 
 export type PlayerState = (typeof PlayerState)[keyof typeof PlayerState]
 
+interface PlayerProps {
+  name: string
+  version?: string
+}
+
 /**
  * 播放器配置选项
  */
@@ -38,24 +37,8 @@ export interface PlayerOptions {
   playbackRate?: number
   /** 音频加载超时时间（毫秒） */
   loadTimeout?: number
-  /** 版本信息 */
-  version?: string
-}
-
-/**
- * 播放器事件回调
- */
-export interface PlayerEvents {
-  onPlay?: () => void
-  onPause?: () => void
-  onEnded?: () => void
-  onTimeUpdate?: (currentTime: number) => void
-  onVolumeChange?: (volume: number) => void
-  onError?: (error: string) => void
-  onLoading?: (loading: boolean) => void
-  onDurationChange?: (duration: number) => void
-  onLineChange?: (line: LRCLine | null, index: number) => void
-  onResourcesLoaded?: () => void
+  /** 资源基础路径 */
+  basePath?: string
 }
 
 /**
@@ -69,6 +52,9 @@ export interface UsePlayerReturn {
   isPlaying: Ref<boolean>
   isLoading: Ref<boolean>
   error: Ref<string>
+  volume: Ref<number>
+  isMuted: Ref<boolean>
+  playbackRate: Ref<number>
 
   // 歌词相关
   lrcLines: Ref<LRCLine[]>
@@ -78,32 +64,33 @@ export interface UsePlayerReturn {
   // 计算属性
   progress: Ref<number>
   audioReady: Ref<boolean>
+  formattedCurrentTime: Ref<string>
+  formattedDuration: Ref<string>
 
   // 控制方法
-  play: () => void
+  play: (fromTime?: number) => void
   pause: () => void
+  resume: () => void
   seek: (time: number) => void
-  loadAudio: (name: string, version?: string) => Promise<void>
+  togglePlay: () => void
+  setVolume: (volume: number) => void
+  toggleMute: () => void
+  setPlaybackRate: (rate: number) => void
   destroy: () => void
 
   // 资源管理
-  initPlayer: () => Promise<void>
-  clearCache: () => Promise<void>
+  initPlayer: (name: string, version?: string) => Promise<void>
 }
 
 /**
  * 专业音频播放器组合式函数
- * 集成音频播放、歌词同步、资源缓存等功能
+ * 集成音频播放、歌词同步、资源缓存、音量控制等功能
  *
  * @param options - 播放器配置
  * @param events - 事件回调
  * @returns 播放器实例
  */
-export function usePlayer(
-  props: PlayerProps = {},
-  options: PlayerOptions = {},
-  events: PlayerEvents = {}
-): UsePlayerReturn {
+export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UsePlayerReturn {
   // 默认配置
   const defaultOptions: Required<PlayerOptions> = {
     autoplay: false,
@@ -111,33 +98,40 @@ export function usePlayer(
     volume: 0.7,
     playbackRate: 1.0,
     loadTimeout: 10000,
-    version: 'NCE1'
+    basePath: 'data'
   }
 
   const config = { ...defaultOptions, ...options }
 
-  // 组合式函数
-  const { cacheFile, readFile, fileExists, deleteFile } = useOPFS()
-  const {
-    isPlaying,
-    currentTimeOffset: currentTime,
-    duration,
-    loadFromBuffer,
-    play,
-    pause,
-    resume,
-    seek,
-    getCurrentTime,
-    destroy
-  } = useAudio()
+  // Web Audio API 相关
+  const audioContext = shallowRef<AudioContext | null>(null)
+  const gainNode = shallowRef<GainNode | null>(null)
+  const sourceNode = shallowRef<AudioBufferSourceNode | null>(null)
+  const audioBuffer = shallowRef<AudioBuffer | null>(null)
+
+  // 播放控制状态
+  let startTime = 0
+  let offset = 0
+  let animationId: number | null = null
 
   // 响应式状态
   const state = ref<PlayerState>(PlayerState.IDLE)
+  const isPlaying = ref(false)
+  const currentTime = ref(0)
+  const duration = ref(0)
+  const volume = ref(config.volume)
+  const isMuted = ref(false)
+  const playbackRate = ref(config.playbackRate)
   const isLoading = ref(false)
   const error = ref('')
   const audioReady = ref(false)
   const lrcLines = ref<LRCLine[]>([])
   const currentLineIndex = ref(-1)
+
+  // 组合式函数
+  const { cacheFile, readFile, fileExists } = useOPFS()
+
+  // 计算属性
   const currentLine = computed(() =>
     currentLineIndex.value >= 0 ? lrcLines.value[currentLineIndex.value] : null
   )
@@ -147,122 +141,304 @@ export function usePlayer(
     return (currentTime.value / duration.value) * 100
   })
 
-  // 同步音频状态
-  watch(isPlaying, playing => {
-    state.value = playing ? PlayerState.PLAYING : PlayerState.PAUSED
-  })
+  const formattedCurrentTime = computed(() => formatTime(currentTime.value))
+  const formattedDuration = computed(() => formatTime(duration.value))
 
-  watch(duration, newDuration => {
-    duration.value = newDuration
-    events.onDurationChange?.(newDuration)
-  })
-
-  // 资源缓存
-  const cacheResource = async (
-    filePath: string,
-    url: string,
-    type: '音频' | '歌词'
-  ): Promise<void> => {
-    const exists = await fileExists(filePath)
-    if (exists) return
-
-    console.log(`正在下载${type}文件...`)
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`${type}下载失败 (${response.status})`)
-
-    const buffer = await response.arrayBuffer()
-    await cacheFile(filePath, buffer)
-    console.log(`${type}已缓存`)
+  // 辅助函数
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // 加载资源
-  const loadResources = async (name: string, version: string): Promise<void> => {
-    const basePath = `data/${version}`
-    const urls = {
-      mp3: `${basePath}/${name}.mp3`,
-      lrc: `${basePath}/${name}.lrc`
+  const getContext = (): AudioContext => {
+    if (!audioContext.value) {
+      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+      audioContext.value = new AudioCtor()
     }
-
-    const paths = {
-      mp3: `${name}.mp3`,
-      lrc: `${name}.lrc`
+    if (audioContext.value.state === 'suspended') {
+      audioContext.value.resume()
     }
+    return audioContext.value
+  }
 
-    try {
-      await Promise.all([
-        cacheResource(paths.mp3, urls.mp3, '音频'),
-        cacheResource(paths.lrc, urls.lrc, '歌词')
-      ])
-
-      // 解析歌词
-      const lrcBuffer = await readFile(paths.lrc)
-      const lrcText = new TextDecoder('utf-8').decode(lrcBuffer)
-      lrcLines.value = parseBilingualLRC(lrcText)
-    } catch (err) {
-      throw new Error(`资源加载失败: ${err instanceof Error ? err.message : '未知错误'}`)
+  const stopCurrentSource = (): void => {
+    if (sourceNode.value) {
+      try {
+        sourceNode.value.stop()
+      } catch {
+        // 忽略已停止的错误
+      }
+      sourceNode.value.disconnect()
+      sourceNode.value = null
     }
   }
 
-  // 初始化音频
-  const initAudio = async (name: string): Promise<void> => {
-    try {
-      const mp3Buffer = await readFile(`${name}.mp3`)
-      await loadFromBuffer(mp3Buffer)
-      audioReady.value = true
-    } catch (err) {
-      throw new Error(`音频初始化失败: ${err instanceof Error ? err.message : '未知错误'}`)
+  const updateTime = (): void => {
+    if (!audioContext.value || !isPlaying.value) return
+
+    const now = audioContext.value.currentTime
+    const elapsed = now - startTime + offset
+    currentTime.value = Math.min(elapsed, duration.value)
+
+    // 更新歌词显示
+    updateCurrentLine(currentTime.value)
+
+    animationId = requestAnimationFrame(updateTime)
+  }
+
+  const updateCurrentLine = (time: number): void => {
+    const idx = lrcLines.value.findLastIndex(line => line.time <= time)
+    if (idx !== currentLineIndex.value) {
+      currentLineIndex.value = idx
     }
   }
 
-  // 加载音频
-  const loadAudio = async (
-    name: string = props.name || '',
-    version: string = props.version || ''
-  ): Promise<void> => {
+  const createSourceNode = (): AudioBufferSourceNode | null => {
+    if (!audioContext.value || !audioBuffer.value) return null
+
+    const source = audioContext.value.createBufferSource()
+    source.buffer = audioBuffer.value
+    source.playbackRate.value = playbackRate.value
+
+    if (gainNode.value) {
+      source.connect(gainNode.value)
+    } else {
+      source.connect(audioContext.value.destination)
+    }
+
+    source.onended = () => {
+      isPlaying.value = false
+      state.value = PlayerState.ENDED
+    }
+
+    return source
+  }
+
+  // 播放控制方法
+  const play = (fromTime?: number): void => {
+    if (!audioBuffer.value || !audioContext.value) return
+
+    const ctx = getContext()
+    // 如果已经在播放，先停止当前播放
+    if (isPlaying.value) {
+      stopCurrentSource()
+    }
+
+    // 如果已经到达末尾，从头开始
+    if (currentTime.value >= duration.value) {
+      offset = 0
+      currentTime.value = 0
+    }
+
+    // 创建新源节点
+    sourceNode.value = createSourceNode()
+    if (!sourceNode.value) return
+
+    // 记录开始时间
+    startTime = ctx.currentTime
+    const startOffset = fromTime !== undefined ? fromTime : offset
+    sourceNode.value.start(0, startOffset)
+
+    isPlaying.value = true
+    state.value = PlayerState.PLAYING
+    offset = startOffset
+
+    // 启动时间更新循环
+    if (animationId) cancelAnimationFrame(animationId)
+    animationId = requestAnimationFrame(updateTime)
+  }
+
+  const pause = (): void => {
+    if (!audioContext.value || !isPlaying.value) return
+
+    // 记录当前播放位置
+    const elapsed = audioContext.value.currentTime - startTime + offset
+    offset = Math.min(elapsed, duration.value)
+    currentTime.value = offset
+
+    // 停止源节点
+    stopCurrentSource()
+    isPlaying.value = false
+    state.value = PlayerState.PAUSED
+
+    if (animationId) {
+      cancelAnimationFrame(animationId)
+      animationId = null
+    }
+  }
+
+  const resume = (): void => {
+    if (!isPlaying.value && audioBuffer.value) {
+      play(offset)
+    }
+  }
+
+  const togglePlay = (): void => {
+    if (isPlaying.value) {
+      pause()
+    } else {
+      play(offset)
+    }
+  }
+
+  const seek = (time: number): void => {
+    const newTime = Math.min(Math.max(0, time), duration.value)
+    const wasPlaying = isPlaying.value
+
+    if (wasPlaying) {
+      // 如果正在播放，先暂停
+      pause()
+    }
+
+    // 更新播放位置
+    offset = newTime
+    currentTime.value = newTime
+
+    if (wasPlaying) {
+      // 如果之前正在播放，从新位置继续播放
+      play(newTime)
+    } else {
+      // 暂停状态只更新位置
+      stopCurrentSource()
+    }
+
+    // 更新歌词显示
+    updateCurrentLine(currentTime.value)
+  }
+
+  const setVolume = (value: number): void => {
+    volume.value = Math.min(1, Math.max(0, value))
+    if (gainNode.value) {
+      gainNode.value.gain.value = isMuted.value ? 0 : volume.value
+    }
+  }
+
+  const toggleMute = (): void => {
+    isMuted.value = !isMuted.value
+    if (gainNode.value) {
+      gainNode.value.gain.value = isMuted.value ? 0 : volume.value
+    }
+  }
+
+  const setPlaybackRate = (rate: number): void => {
+    playbackRate.value = rate
+    if (sourceNode.value) {
+      sourceNode.value.playbackRate.value = rate
+    }
+  }
+
+  const destroy = (): void => {
+    if (isPlaying.value) pause()
+    if (animationId) cancelAnimationFrame(animationId)
+    if (sourceNode.value) stopCurrentSource()
+    if (audioContext.value) {
+      audioContext.value.close()
+    }
+  }
+
+  /**
+   * 统一的资源加载方法
+   * 整合了缓存、资源加载、音频初始化的完整流程
+   */
+  const initPlayer = async (name?: string, version?: string): Promise<void> => {
     try {
       state.value = PlayerState.LOADING
       isLoading.value = true
       error.value = ''
-      events.onLoading?.(true)
 
-      await loadResources(name, version)
-      await initAudio(name)
+      // 使用参数或props中的值
+      const audioName = name || props.name
+      const audioVersion = version || props.version
 
-      state.value = PlayerState.IDLE
-      isLoading.value = false
-      events.onLoading?.(false)
-      events.onResourcesLoaded?.()
-
-      if (config.autoplay) {
-        await play()
+      if (!audioName) {
+        throw new Error('音频名称不能为空')
       }
+
+      const basePath = `${config.basePath}/${audioVersion}`
+      const files = {
+        mp3: `${audioName}.mp3`,
+        lrc: `${audioName}.lrc`
+      }
+
+      const urls = {
+        mp3: `${basePath}/${audioName}.mp3`,
+        lrc: `${basePath}/${audioName}.lrc`
+      }
+
+      // 1. 缓存音频和歌词文件
+      await Promise.all([cacheResource(files.mp3, urls.mp3), cacheResource(files.lrc, urls.lrc)])
+
+      // 2. 解析歌词
+      await initLrc(files.lrc)
+
+      // 3. 初始化音频
+      await initAudio(files.mp3)
     } catch (err) {
       state.value = PlayerState.ERROR
       isLoading.value = false
       error.value = err instanceof Error ? err.message : '未知错误'
-      events.onLoading?.(false)
-      events.onError?.(error.value)
+      throw err // 重新抛出错误，让调用方可以处理
     }
   }
 
-  // 初始化播放器
-  const initPlayer = async (): Promise<void> => {
-    await loadAudio()
+  const cacheResource = async (name: string, url: string) => {
+    const exists = await fileExists(name)
+    if (exists) return
+
+    console.log(`正在下载${name}文件...`)
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`${name}下载失败 (${response.status})`)
+
+    const buffer = await response.arrayBuffer()
+    await cacheFile(name, buffer)
+    console.log(`${name}已缓存`)
   }
 
-  // 清除缓存
-  const clearCache = async (): Promise<void> => {
-    try {
-      await (window as any).showDirectoryPicker?.()
-      // 这里需要根据实际缓存机制实现
-      console.log('清除缓存功能待实现')
-    } catch (err) {
-      console.error('清除缓存失败:', err)
+  const initLrc = async (file: string): Promise<void> => {
+    const lrcBuffer = await readFile(file)
+    const lrcText = new TextDecoder('utf-8').decode(lrcBuffer)
+    lrcLines.value = parseBilingualLRC(lrcText)
+  }
+
+  const initAudio = async (file: string): Promise<void> => {
+    // 3. 初始化音频上下文和音频数据
+    const ctx = getContext()
+
+    // 创建音量控制节点
+    gainNode.value = ctx.createGain()
+    gainNode.value.connect(ctx.destination)
+    gainNode.value.gain.value = isMuted.value ? 0 : volume.value
+
+    // 加载并解码音频数据
+    const mp3Buffer = await readFile(file)
+    audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
+    duration.value = audioBuffer.value.duration
+
+    audioReady.value = true
+    // 重置播放状态
+    offset = 0
+    currentTime.value = 0
+    state.value = PlayerState.IDLE
+    isLoading.value = false
+
+    // 4. 自动播放（如果配置了）
+    if (config.autoplay) {
+      await play()
     }
   }
+
+  // 状态同步
+  watch(isPlaying, playing => {
+    state.value = playing ? PlayerState.PLAYING : PlayerState.PAUSED
+  })
 
   onMounted(() => {
     initPlayer()
+  })
+
+  onUnmounted(() => {
+    destroy()
   })
 
   return {
@@ -273,6 +449,9 @@ export function usePlayer(
     isPlaying,
     isLoading,
     error,
+    volume,
+    isMuted,
+    playbackRate,
 
     // 歌词相关
     lrcLines,
@@ -282,16 +461,21 @@ export function usePlayer(
     // 计算属性
     progress,
     audioReady,
+    formattedCurrentTime,
+    formattedDuration,
 
     // 控制方法
     play,
     pause,
+    resume,
     seek,
-    loadAudio,
+    togglePlay,
+    setVolume,
+    toggleMute,
+    setPlaybackRate,
     destroy,
 
     // 资源管理
-    initPlayer,
-    clearCache
+    initPlayer
   }
 }

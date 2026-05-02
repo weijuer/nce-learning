@@ -2,30 +2,21 @@
 @import url('./variables.css');
 
 :root {
-  --bg: #fff;
-  --surface: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-
-  --color-primary: #aa3bff;
-  --color-primary-dark: #8229ff;
-
-  --color-surface: #141414;
-  --color-text: #09090b;
-  --color-text-dim: #888888;
-  --color-text-muted: #555555;
-  --color-cyan: #b44aff;
-  --color-cyan-dim: #7a2db8;
-  --color-cyan-glow: rgba(180, 74, 255, 0.3);
-  --color-cyan-glow-strong: rgba(180, 74, 255, 0.6);
-  --color-green: #00ff41;
-  --color-green-dim: #00aa2a;
-  --color-green-glow: rgba(0, 255, 65, 0.25);
-  --color-border: #e5e4e7;
+  --color-accent: light-dark(#aa3bff, #bb6bff);
+  --color-surface: light-dark(#f8f9fa, #0a0a0a);
+  --color-bg: light-dark(#ffffff, #000000);
+  --color-primary: light-dark(#aa3bff, #bb6bff);
+  --color-text: light-dark(#09090b, #f5f5f5);
+  --color-text-dim: light-dark(#888888, #a0a0a0);
+  --color-text-muted: light-dark(#555555, #6b6b6b);
+  --color-cyan: light-dark(#b44aff, #c88bff);
+  --color-cyan-dim: light-dark(#7a2db8, #8a4dcc);
+  --color-cyan-glow: light-dark(rgba(180, 74, 255, 0.3), rgba(200, 139, 255, 0.4));
+  --color-cyan-glow-strong: light-dark(rgba(180, 74, 255, 0.6), rgba(200, 139, 255, 0.7));
+  --color-green: light-dark(#00ff41, #00ff88);
+  --color-green-dim: light-dark(#00aa2a, #00cc6a);
+  --color-green-glow: light-dark(rgba(0, 255, 65, 0.25), rgba(0, 255, 136, 0.3));
+  --color-border: light-dark(#e5e4e7, #333333);
 
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
@@ -45,19 +36,9 @@
   }
 }
 
+/* 暗色主题特定的图标样式 */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --text-h: #f3f4f6;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
   #social .button-icon {
-    filter: invert(1) brightness(2);
+    filter: invert(1) brightness(1.5);
   }
 }

@@ -3,7 +3,7 @@
     <!-- 音频控制区域 -->
     <div class="audio-controls">
       <!-- 播放/暂停按钮 -->
-      <button class="play-pause-btn" @click="togglePlay" :disabled="internalDuration === 0">
+      <button class="play-pause-btn" @click="togglePlay" :disabled="duration === 0">
         <svg v-if="!isPlaying" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z" />
         </svg>
@@ -15,7 +15,7 @@
       <!-- 进度条和时间显示 -->
       <div class="progress-section">
         <!-- 当前时间 -->
-        <span class="time current-time">{{ formatTime(internalCurrentTime) }}</span>
+        <span class="time current-time">{{ formatTime(currentTime) }}</span>
 
         <!-- 进度条 -->
         <div class="progress-bar-container" @click="seekToPosition">
@@ -30,7 +30,7 @@
         </div>
 
         <!-- 总时间 -->
-        <span class="time total-time">{{ formatTime(internalDuration) }}</span>
+        <span class="time total-time">{{ formatTime(duration) }}</span>
       </div>
 
       <!-- 音量控制 -->
@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { formatTime } from 'Utils/common'
 
 interface Props {
@@ -87,69 +87,37 @@ interface Props {
 }
 
 interface Emits {
-  (e: 'update:isPlaying', value: boolean): void
-  (e: 'update:currentTime', value: number): void
   (e: 'seek', time: number): void
   (e: 'play'): void
   (e: 'pause'): void
+  (e: 'resume'): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  autoPlay: false,
-  isPlaying: false,
-  currentTime: 0,
-  duration: 0
-})
+const { isPlaying = false, currentTime = 0, duration = 0 } = defineProps<Props>()
 
 const emit = defineEmits<Emits>()
 
 // 响应式状态
-const internalIsPlaying = ref(props.isPlaying)
-const internalCurrentTime = ref(props.currentTime)
-const internalDuration = ref(props.duration)
 const volume = ref(0.7)
 const isMuted = ref(false)
 const isDragging = ref(false)
 
-// 同步外部状态
-watch(
-  () => props.isPlaying,
-  newVal => {
-    internalIsPlaying.value = newVal
-  }
-)
-
-watch(
-  () => props.currentTime,
-  newVal => {
-    if (!isDragging.value) {
-      internalCurrentTime.value = newVal
-    }
-  }
-)
-
-watch(
-  () => props.duration,
-  newVal => {
-    internalDuration.value = newVal
-  }
-)
-
 // 计算属性
 const progressPercentage = computed(() => {
-  if (internalDuration.value === 0) return 0
-  return (internalCurrentTime.value / internalDuration.value) * 100
+  if (duration === 0) return 0
+  return (currentTime / duration) * 100
 })
 
 // 播放/暂停切换
 const togglePlay = async () => {
   try {
-    if (internalIsPlaying.value) {
+    if (isPlaying) {
       emit('pause')
+    } else if (duration > 0) {
+      emit('resume')
     } else {
       emit('play')
     }
-    internalIsPlaying.value = !internalIsPlaying.value
   } catch (error) {
     console.error('播放失败:', error)
   }
@@ -177,16 +145,14 @@ const setVolume = (event: MouseEvent) => {
 
 // 进度条点击跳转
 const seekToPosition = (event: MouseEvent) => {
-  if (internalDuration.value === 0) return
+  if (duration === 0) return
 
   const progressBar = event.currentTarget as HTMLElement
   const rect = progressBar.getBoundingClientRect()
   const clickX = event.clientX - rect.left
   const percentage = clickX / rect.width
-  const newTime = percentage * internalDuration.value
+  const newTime = percentage * duration
 
-  internalCurrentTime.value = newTime
-  emit('update:currentTime', newTime)
   emit('seek', newTime)
 }
 
@@ -202,17 +168,16 @@ const startDragging = (event: MouseEvent) => {
     const rect = progressBar.getBoundingClientRect()
     const clickX = Math.max(0, Math.min(rect.width, moveEvent.clientX - rect.left))
     const percentage = clickX / rect.width
-    const newTime = percentage * internalDuration.value
+    const newTime = percentage * duration
 
-    internalCurrentTime.value = newTime
-    emit('update:currentTime', newTime)
+    emit('seek', newTime)
   }
 
   const onMouseUp = () => {
     isDragging.value = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
-    emit('seek', internalCurrentTime.value)
+    emit('seek', currentTime)
   }
 
   document.addEventListener('mousemove', onMouseMove)
@@ -222,11 +187,11 @@ const startDragging = (event: MouseEvent) => {
 
 <style scoped>
 .audio-player {
-  background: var(--surface);
+  background: var(--color-surface);
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
 }
 
 .audio-controls {
@@ -251,12 +216,12 @@ const startDragging = (event: MouseEvent) => {
 }
 
 .play-pause-btn:hover:not(:disabled) {
-  background: var(--color-primary-dark);
+  background: var(--color-primary);
   transform: scale(1.05);
 }
 
 .play-pause-btn:disabled {
-  background: var(--disabled);
+  background: var(--color-disabled);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -290,7 +255,7 @@ const startDragging = (event: MouseEvent) => {
   position: relative;
   width: 100%;
   height: 4px;
-  background: var(--border);
+  background: var(--color-border);
   border-radius: 2px;
   overflow: visible;
 }
@@ -363,7 +328,7 @@ const startDragging = (event: MouseEvent) => {
 .volume-slider-background {
   width: 100%;
   height: 4px;
-  background: var(--border);
+  background: var(--color-border);
   border-radius: 2px;
   position: relative;
 }
@@ -382,8 +347,8 @@ const startDragging = (event: MouseEvent) => {
   }
 
   .play-pause-btn {
-    width: 40px;
-    height: 40px;
+    width: 2rem;
+    height: 2rem;
   }
 
   .progress-section {
@@ -397,35 +362,6 @@ const startDragging = (event: MouseEvent) => {
 
   .volume-slider-container {
     width: 60px;
-  }
-}
-
-/* 暗色主题支持 */
-@media (prefers-color-scheme: dark) {
-  .audio-player {
-    background: var(--surface-dark);
-    border-color: var(--border-dark);
-  }
-
-  .time {
-    color: var(--text-secondary-dark);
-  }
-
-  .progress-bar-background {
-    background: var(--border-dark);
-  }
-
-  .volume-btn {
-    color: var(--text-secondary-dark);
-  }
-
-  .volume-btn:hover {
-    color: var(--text-primary-dark);
-    background: var(--hover-dark);
-  }
-
-  .volume-slider-background {
-    background: var(--border-dark);
   }
 }
 </style>

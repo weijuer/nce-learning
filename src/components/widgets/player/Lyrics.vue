@@ -61,7 +61,7 @@ watch(
  */
 function handleLineClick(line: LRCLine): void {
   emit('line-click', line)
-  emit('seek', line.time)
+  // emit('seek', line.time)
 }
 
 /**
@@ -164,7 +164,7 @@ onMounted(() => {
     </div>
 
     <!-- 控制面板 -->
-    <div class="control-panel">
+    <div class="control-panel" v-if="isPlaying">
       <div class="control-buttons">
         <button
           class="control-btn toggle-btn"
@@ -208,9 +208,6 @@ onMounted(() => {
 .lyrics {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
 .current-line-display {

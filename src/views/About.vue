@@ -43,8 +43,8 @@
 
 <style scoped>
 .terminal-block {
-  --terminal-bg-card: #fff;
-  --terminal-surface: #fff;
+  --terminal-bg-card: light-dark(#fff, #000);
+  --terminal-surface: light-dark(#fff, #000);
 
   max-width: 50vw;
   margin: 0 auto;
