@@ -38,5 +38,3 @@ const description = computed(() => {
     <Player :name="name" :version="version" />
   </div>
 </template>
-
-<style scoped></style>
