@@ -34,7 +34,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: latest
+          version: 10
           cache: true
       - name: Set up Node
         uses: actions/setup-node@v6
