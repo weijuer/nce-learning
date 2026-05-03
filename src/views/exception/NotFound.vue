@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { WButton } from 'w-design-vue'
-
 defineOptions({
   name: 'NotFound'
 })
@@ -10,7 +8,7 @@ defineOptions({
   <section class="app-page exception">
     <h1>404</h1>
     <p>页面走丢了</p>
-    <w-button type="primary" @click="$router.push('/')">返回主页</w-button>
+    <button type="button" @click="$router.push('/')">返回主页</button>
   </section>
 </template>
 
