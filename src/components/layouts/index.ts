@@ -1,3 +1,4 @@
-import Layout from './Layout.vue';
+import Layout from './Layout.vue'
+import { WTabs, WTab } from './tabs'
 
-export { Layout };
+export { Layout, WTabs, WTab }

@@ -1,6 +1,6 @@
 <script name="book" setup lang="ts">
 import { ref } from 'vue'
-import { WTabs, WTab } from 'w-design-vue'
+import { WTabs, WTab } from '@/components/layouts'
 import { NCE_JSON } from '@/utils/nce-data'
 import { useRouter } from 'vue-router'
 

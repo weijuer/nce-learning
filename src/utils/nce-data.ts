@@ -57,4 +57,4 @@ export const generateNCEJson = (): NCEData => {
   return nceData
 }
 
-export const NCE_JSON = JSON.parse(NCE_JSON_SOURCE as unknown as string)
+export const NCE_JSON: NCEData = JSON.parse(NCE_JSON_SOURCE as unknown as string)
