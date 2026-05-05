@@ -201,7 +201,7 @@
   .split-navigation__item {
     a {
       font-family: var(--font-mono);
-      font-size: 0.8rem;
+      font-size: clamp(0.85rem, 2.5vw, 1rem);
       font-weight: 400;
       color: var(--color-text-dim);
       padding: 0.4rem 0.75rem;
@@ -252,7 +252,7 @@
   gap: 1rem;
 
   h1 {
-    font-size: 2.5rem;
+    font-size: clamp(1.5rem, 5vw, 2.5rem);
     font-weight: 600;
   }
 

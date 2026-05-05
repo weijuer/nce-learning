@@ -148,8 +148,7 @@ onMounted(() => {
         :class="{
           active: index === currentLineIndex,
           past: index < currentLineIndex,
-          future: index > currentLineIndex,
-          'has-translation': line.textZh && showTranslation
+          future: index > currentLineIndex
         }"
         @click="() => handleLineClick(line)"
       >
@@ -211,6 +210,7 @@ onMounted(() => {
 }
 
 .current-line-display {
+  margin-bottom: 1rem;
   padding: 40px 20px;
   text-align: center;
   background: rgba(0, 0, 0, 0.3);
@@ -234,9 +234,11 @@ onMounted(() => {
 }
 
 .lyrics-scroll-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
   scroll-behavior: smooth;
 }
 
@@ -257,19 +259,17 @@ onMounted(() => {
 
 .lyric-line:hover {
   background: rgba(255, 255, 255, 0.1);
-  transform: translateX(5px);
 }
 
 .lyric-line.active {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  transform: scale(1.02);
+  transform: scale(0.95);
 }
 
 .lyric-line.past {
   opacity: 0.6;
-  transform: scale(0.95);
 }
 
 .lyric-line.future {
@@ -366,100 +366,5 @@ onMounted(() => {
 .current-time {
   font-weight: 600;
   color: #ffd700;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .current-line-text {
-    font-size: 2rem;
-  }
-
-  .current-line-translation {
-    font-size: 1.2rem;
-  }
-
-  .english-text {
-    font-size: 1.1rem;
-  }
-
-  .chinese-text {
-    font-size: 1rem;
-  }
-
-  .control-panel {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-  }
-
-  .control-buttons {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .progress-info {
-    justify-content: center;
-  }
-
-  .lyric-line {
-    padding: 12px 16px;
-  }
-
-  .lyric-line.has-translation {
-    padding: 16px;
-  }
-
-  .time-indicator {
-    position: static;
-    transform: none;
-    margin-top: 8px;
-    display: inline-block;
-  }
-}
-
-@media (max-width: 480px) {
-  .current-line-text {
-    font-size: 1.6rem;
-  }
-
-  .current-line-translation {
-    font-size: 1rem;
-  }
-
-  .english-text {
-    font-size: 1rem;
-  }
-
-  .lyrics-scroll-container {
-    padding: 12px;
-  }
-
-  .control-btn {
-    padding: 6px 10px;
-    font-size: 0.8rem;
-  }
-
-  .btn-text {
-    display: none;
-  }
-}
-
-/* 滚动条样式 */
-.lyrics-scroll-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lyrics-scroll-container::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.lyrics-scroll-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-}
-
-.lyrics-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
 }
 </style>

@@ -24,7 +24,7 @@
   --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-heading: system-ui, 'Segoe UI', Roboto, sans-serif;
 
-  font: 18px/145% var(--font-sans);
+  font: 16px/145% var(--font-sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
   font-synthesis: none;
@@ -41,5 +41,70 @@
 @media (prefers-color-scheme: dark) {
   #social .button-icon {
     filter: invert(1) brightness(1.5);
+  }
+}
+
+.btn {
+  margin: 0;
+  position: relative;
+  white-space: nowrap;
+  font-size: var(--w-button-font-size, 1rem);
+  line-height: 1;
+  user-select: none;
+  touch-action: manipulation;
+  padding-inline: 1rem;
+  padding-block: 0.5rem;
+  cursor: pointer;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--w-button-border-radius, 6px);
+  transition:
+    background-color 0.2s,
+    outline-width 0.2s,
+    transform 0.2s;
+
+  &.btn-default {
+    color: #fff;
+    background-color: var(--w-color-default);
+    border-color: var(--w-color-default);
+
+    &:hover {
+      background-color: hsl(from var(--w-color-default) h s 45%);
+      border-color: hsl(from var(--w-color-default) h s 45%);
+    }
+  }
+
+  &.btn-brand {
+    color: #fff;
+    background-color: var(--w-color-brand);
+    border-color: var(--w-color-brand);
+
+    &:hover {
+      background-color: hsl(from var(--w-color-brand) h s 45%);
+      border-color: hsl(from var(--w-color-brand) h s 45%);
+    }
+  }
+
+  &.btn-primary {
+    color: #fff;
+    background-color: var(--w-color-primary);
+    border-color: var(--w-color-primary);
+
+    &:hover {
+      background-color: hsl(from var(--w-color-primary) h s 45%);
+      border-color: hsl(from var(--w-color-primary) h s 45%);
+    }
+  }
+
+  &.btn-secondary {
+    color: #fff;
+    background-color: var(--w-color-secondary);
+    border-color: var(--w-color-secondary);
+
+    &:hover {
+      background-color: hsl(from var(--w-color-secondary) h s 45%);
+      border-color: hsl(from var(--w-color-secondary) h s 45%);
+    }
   }
 }

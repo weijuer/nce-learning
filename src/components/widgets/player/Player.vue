@@ -233,7 +233,6 @@ const error = ref('')
   margin: auto;
 
   .audio-section {
-    margin-top: var(--spacing-xl);
     position: sticky;
     bottom: 1%;
   }

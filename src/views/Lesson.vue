@@ -36,5 +36,18 @@ const description = computed(() => {
       <p>{{ description }}</p>
     </header>
     <Player :name="name" :version="version" />
+
+    <!-- <div class="btn-container">
+      <button class="btn btn-secondary">上一课</button>
+      <button class="btn btn-secondary">下一课</button>
+    </div> -->
   </div>
 </template>
+
+<style scoped>
+.btn-container {
+  margin: 1.5rem 0;
+  display: flex;
+  justify-content: space-around;
+}
+</style>
