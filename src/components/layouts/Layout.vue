@@ -1,3 +1,9 @@
+<script setup lang="ts">
+const toggleTheme = () => {
+  document.documentElement.classList.toggle('dark')
+}
+</script>
+
 <template>
   <div class="holy-grail">
     <header class="app-header">
@@ -14,10 +20,25 @@
               <router-link to="/">Home</router-link>
             </li>
             <li class="split-navigation__item">
-              <router-link to="/books">Books</router-link>
+              <router-link
+                to="/books"
+                :class="{ 'router-link-exact-active': $route.path.startsWith('/books') }"
+              >
+                Books
+              </router-link>
             </li>
             <li class="split-navigation__item">
               <router-link to="/about">About</router-link>
+            </li>
+            <li class="split-navigation__item">
+              <button @click="toggleTheme" class="theme-toggle">
+                <svg class="icon" viewBox="0 0 1024 1024">
+                  <path
+                    d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896z m0 96a352 352 0 1 0 0 704 352 352 0 0 0 0-704z m32 64v576a288 288 0 1 1 0-576z"
+                    fill="#2C2C2C"
+                  ></path>
+                </svg>
+              </button>
             </li>
           </ul>
         </nav>
@@ -193,6 +214,8 @@
 }
 
 .split-navigation {
+  margin: 0;
+  padding: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -219,6 +242,12 @@
     &:first-child {
       margin-left: auto;
     }
+
+    .icon {
+      vertical-align: middle;
+      fill: currentColor;
+      overflow: hidden;
+    }
   }
 }
 
@@ -242,6 +271,21 @@
   .nav-logo-text {
     color: var(--color-text);
   }
+}
+
+.theme-toggle {
+  width: clamp(32px, 2.5vw, 40px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--color-shadow);
 }
 
 .page-hero {

@@ -8,8 +8,8 @@
           <div class="spinner-dot"></div>
         </div>
         <div class="loading-text">
-          <h3>加载学习资源</h3>
-          <p>正在准备《{{ props.name }}》的音频和文本内容...</p>
+          <h3>Loading Resources</h3>
+          <p>Loading [{{ props.name }}]...</p>
         </div>
       </div>
     </div>
@@ -18,7 +18,7 @@
     <div v-if="error" class="error-card">
       <div class="error-icon">⚠️</div>
       <div class="error-content">
-        <h4>资源加载失败</h4>
+        <h4>Loading Error</h4>
         <p>{{ error }}</p>
         <!-- <button class="retry-btn" @click="initPlayer">重试</button> -->
       </div>
@@ -52,7 +52,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { usePlayer } from 'Composables/usePlayer'
 import AudioPlayer from './AudioPlayer.vue'
 import Lyrics from './Lyrics.vue'
@@ -74,6 +73,7 @@ const {
   duration,
   lrcLines,
   currentLineIndex,
+  error,
   play,
   pause,
   resume,
@@ -83,10 +83,9 @@ const {
 const handleLineClick = (line: any) => {
   seek(line.time)
 }
-const error = ref('')
 </script>
 
-<style lang="scss">
+<style>
 :root {
   --primary-color: #2c5530;
   --primary-light: #4a7c59;
@@ -116,7 +115,6 @@ const error = ref('')
   }
 }
 
-// 加载状态
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -179,7 +177,6 @@ const error = ref('')
   }
 }
 
-// 错误提示
 .error-card {
   background: #fed7d7;
   border: 1px solid #feb2b2;
@@ -227,7 +224,6 @@ const error = ref('')
   }
 }
 
-// 主内容区域
 .player-content {
   max-width: 800px;
   margin: auto;
@@ -238,7 +234,6 @@ const error = ref('')
   }
 }
 
-// 头部信息栏
 .player-header {
   display: flex;
   justify-content: space-between;
@@ -305,5 +300,12 @@ const error = ref('')
   }
 }
 
-// 歌词显示区域
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
 </style>

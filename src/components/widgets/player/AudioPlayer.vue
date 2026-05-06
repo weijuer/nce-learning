@@ -360,8 +360,8 @@ const startDragging = (event: MouseEvent) => {
     min-width: 35px;
   }
 
-  .volume-slider-container {
-    width: 60px;
+  .volume-control {
+    display: none;
   }
 }
 </style>

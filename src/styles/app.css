@@ -32,19 +32,18 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+  &.dark {
+    color-scheme: dark;
   }
-}
 
-/* 暗色主题特定的图标样式 */
-@media (prefers-color-scheme: dark) {
-  #social .button-icon {
-    filter: invert(1) brightness(1.5);
+  &.light {
+    color-scheme: light;
   }
 }
 
 .btn {
+  --btn-color: var(--w-color-default);
+
   margin: 0;
   position: relative;
   white-space: nowrap;
@@ -64,47 +63,28 @@
     outline-width 0.2s,
     transform 0.2s;
 
-  &.btn-default {
-    color: #fff;
-    background-color: var(--w-color-default);
-    border-color: var(--w-color-default);
+  color: contrast-color(var(--btn-color));
+  background-color: var(--btn-color);
+  border-color: var(--btn-color);
 
-    &:hover {
-      background-color: hsl(from var(--w-color-default) h s 45%);
-      border-color: hsl(from var(--w-color-default) h s 45%);
-    }
+  &:hover {
+    background-color: hsl(from var(--btn-color) h s 45%);
+    border-color: hsl(from var(--btn-color) h s 45%);
+  }
+
+  &.btn-default {
+    --btn-color: var(--w-color-default);
   }
 
   &.btn-brand {
-    color: #fff;
-    background-color: var(--w-color-brand);
-    border-color: var(--w-color-brand);
-
-    &:hover {
-      background-color: hsl(from var(--w-color-brand) h s 45%);
-      border-color: hsl(from var(--w-color-brand) h s 45%);
-    }
+    --btn-color: var(--w-color-brand);
   }
 
   &.btn-primary {
-    color: #fff;
-    background-color: var(--w-color-primary);
-    border-color: var(--w-color-primary);
-
-    &:hover {
-      background-color: hsl(from var(--w-color-primary) h s 45%);
-      border-color: hsl(from var(--w-color-primary) h s 45%);
-    }
+    --btn-color: var(--w-color-primary);
   }
 
   &.btn-secondary {
-    color: #fff;
-    background-color: var(--w-color-secondary);
-    border-color: var(--w-color-secondary);
-
-    &:hover {
-      background-color: hsl(from var(--w-color-secondary) h s 45%);
-      border-color: hsl(from var(--w-color-secondary) h s 45%);
-    }
+    --btn-color: var(--w-color-secondary);
   }
 }

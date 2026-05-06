@@ -35,11 +35,12 @@ const description = computed(() => {
       <h1>{{ title }}</h1>
       <p>{{ description }}</p>
     </header>
+
     <Player :name="name" :version="version" />
 
     <!-- <div class="btn-container">
-      <button class="btn btn-secondary">上一课</button>
-      <button class="btn btn-secondary">下一课</button>
+      <button class="btn btn-secondary">Previous</button>
+      <button class="btn btn-secondary">Next</button>
     </div> -->
   </div>
 </template>

@@ -215,22 +215,22 @@ onMounted(() => {
   text-align: center;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
+  border-radius: 14px;
 
-.current-line-text {
-  font-size: 2.5rem;
-  font-weight: 600;
-  line-height: 1.3;
-  margin-bottom: 16px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
+  .current-line-text {
+    font-size: clamp(1.5rem, 5vw, 2.5rem);
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 16px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
 
-.current-line-translation {
-  font-size: 1.5rem;
-  opacity: 0.8;
-  line-height: 1.4;
-  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  .current-line-translation {
+    font-size: clamp(1.1rem, 5vw, 1.5rem);
+    opacity: 0.8;
+    line-height: 1.4;
+    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  }
 }
 
 .lyrics-scroll-container {
@@ -248,11 +248,10 @@ onMounted(() => {
 
 .lyric-line {
   padding: 16px 20px;
-  margin-bottom: 8px;
-  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   border: 2px solid transparent;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(5px);
 }
@@ -265,7 +264,6 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  transform: scale(0.95);
 }
 
 .lyric-line.past {

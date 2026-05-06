@@ -46,6 +46,8 @@ const goLesson = (name: string, version: string | number) => {
         </div>
       </w-tab>
     </w-tabs>
+
+    <router-view />
   </div>
 </template>
 
@@ -57,12 +59,12 @@ const goLesson = (name: string, version: string | number) => {
 
   .lesssons {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    grid-gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    grid-gap: clamp(1rem, 2vw, 24px);
     justify-content: center;
 
     .lesson {
-      padding: 1rem;
+      padding: clamp(1rem, 2vmax, 2.5rem) 1rem;
       position: relative;
       display: flex;
       justify-content: space-between;
