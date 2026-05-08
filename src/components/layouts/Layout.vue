@@ -1,6 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
+const isDark = ref(false)
+
 const toggleTheme = () => {
-  document.documentElement.classList.toggle('dark')
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark', isDark.value)
 }
 </script>
 
@@ -8,7 +13,7 @@ const toggleTheme = () => {
   <div class="holy-grail">
     <header class="app-header">
       <div class="app-header__container container">
-        <a href="/" class="nav-logo">
+        <a href="#/" class="nav-logo">
           <span class="nav-logo-bracket">[</span>
           <span class="nav-logo-text">NCE</span>
           <span class="nav-logo-bracket">]</span>
@@ -16,9 +21,6 @@ const toggleTheme = () => {
 
         <nav>
           <ul class="app-nav split-navigation">
-            <li class="split-navigation__item">
-              <router-link to="/">Home</router-link>
-            </li>
             <li class="split-navigation__item">
               <router-link
                 to="/books"
@@ -31,11 +33,10 @@ const toggleTheme = () => {
               <router-link to="/about">About</router-link>
             </li>
             <li class="split-navigation__item">
-              <button @click="toggleTheme" class="theme-toggle">
+              <button @click="toggleTheme" :class="['theme-toggle', { 'is-dark': isDark }]">
                 <svg class="icon" viewBox="0 0 1024 1024">
                   <path
                     d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896z m0 96a352 352 0 1 0 0 704 352 352 0 0 0 0-704z m32 64v576a288 288 0 1 1 0-576z"
-                    fill="#2C2C2C"
                   ></path>
                 </svg>
               </button>
@@ -274,18 +275,24 @@ const toggleTheme = () => {
 }
 
 .theme-toggle {
-  width: clamp(32px, 2.5vw, 40px);
+  width: clamp(30px, 2.5vw, 40px);
   aspect-ratio: 1 / 1;
   border-radius: 50%;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-  color: var(--color-text);
+  color: var(--color-text-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s linear;
   box-shadow: var(--color-shadow);
+
+  &.is-dark {
+    .icon {
+      transform: rotate(180deg);
+    }
+  }
 }
 
 .page-hero {

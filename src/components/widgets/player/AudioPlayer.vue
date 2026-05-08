@@ -187,11 +187,12 @@ const startDragging = (event: MouseEvent) => {
 
 <style scoped>
 .audio-player {
-  background: var(--color-surface);
-  border-radius: 12px;
-  padding: 16px;
+  padding: clamp(10px, 2vw, 14px);
+  background-color: var(--color-bg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
   border: 1px solid var(--color-border);
+  backdrop-filter: blur(4px);
 }
 
 .audio-controls {
@@ -201,18 +202,18 @@ const startDragging = (event: MouseEvent) => {
 }
 
 .play-pause-btn {
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  width: clamp(2rem, 8vw, 48px);
+  aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
   flex-shrink: 0;
+  cursor: pointer;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  transition: all 0.2s ease;
 }
 
 .play-pause-btn:hover:not(:disabled) {
@@ -221,7 +222,7 @@ const startDragging = (event: MouseEvent) => {
 }
 
 .play-pause-btn:disabled {
-  background: var(--color-disabled);
+  background-color: var(--color-disabled, #ddd);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -352,7 +353,7 @@ const startDragging = (event: MouseEvent) => {
   }
 
   .progress-section {
-    gap: 8px;
+    gap: 4px;
   }
 
   .time {

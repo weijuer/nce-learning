@@ -4,7 +4,7 @@ import Home from '../views/Home.vue'
 const routes = [
   {
     path: '/',
-    name: 'books',
+    name: 'Root',
     component: () => import('../components/layouts/Layout.vue'),
     children: [
       {
@@ -14,13 +14,12 @@ const routes = [
       },
       {
         path: '/books',
-        name: 'book',
-        component: () => import(/* webpackChunkName: "book" */ '../views/Book.vue'),
-        children: []
+        name: 'Books',
+        component: () => import(/* webpackChunkName: "book" */ '../views/Book.vue')
       },
       {
         path: '/books/:version/:name',
-        name: 'lesson',
+        name: 'Lesson',
         component: () => import(/* webpackChunkName: "lesson" */ '../views/Lesson.vue'),
         props: true
       },

@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted, onUnmounted, shallowRef } from 'vue'
+import { ref, computed, watch, onUnmounted, shallowRef } from 'vue'
 import type { Ref } from 'vue'
 import { useOPFS } from './useOPFS'
 import { parseBilingualLRC } from '../utils/lrc-parser'
@@ -17,11 +17,6 @@ export const PlayerState = {
 } as const
 
 export type PlayerState = (typeof PlayerState)[keyof typeof PlayerState]
-
-interface PlayerProps {
-  name: string
-  version?: string
-}
 
 /**
  * 播放器配置选项
@@ -64,8 +59,6 @@ export interface UsePlayerReturn {
   // 计算属性
   progress: Ref<number>
   audioReady: Ref<boolean>
-  formattedCurrentTime: Ref<string>
-  formattedDuration: Ref<string>
 
   // 控制方法
   play: (fromTime?: number) => void
@@ -79,29 +72,26 @@ export interface UsePlayerReturn {
   destroy: () => void
 
   // 资源管理
-  initPlayer: (name: string, version?: string) => Promise<void>
+  loadLesson: (name: string, version: string) => Promise<void>
 }
 
 /**
  * 专业音频播放器组合式函数
  * 集成音频播放、歌词同步、资源缓存、音量控制等功能
  *
- * @param options - 播放器配置
- * @param events - 事件回调
+ * @param options - 播放器配置选项
  * @returns 播放器实例
  */
-export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UsePlayerReturn {
+export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   // 默认配置
-  const defaultOptions: Required<PlayerOptions> = {
+  const config = {
     autoplay: false,
     loop: false,
     volume: 0.7,
     playbackRate: 1.0,
-    loadTimeout: 10000,
-    basePath: 'data'
+    basePath: 'data',
+    ...options
   }
-
-  const config = { ...defaultOptions, ...options }
 
   // Web Audio API 相关
   const audioContext = shallowRef<AudioContext | null>(null)
@@ -136,20 +126,7 @@ export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UseP
     currentLineIndex.value >= 0 ? lrcLines.value[currentLineIndex.value] : null
   )
 
-  const progress = computed(() => {
-    if (duration.value === 0) return 0
-    return (currentTime.value / duration.value) * 100
-  })
-
-  const formattedCurrentTime = computed(() => formatTime(currentTime.value))
-  const formattedDuration = computed(() => formatTime(duration.value))
-
-  // 辅助函数
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
+  const progress = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0))
 
   const getContext = (): AudioContext => {
     if (!audioContext.value) {
@@ -328,103 +305,63 @@ export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UseP
     }
   }
 
-  const destroy = (): void => {
-    if (isPlaying.value) pause()
-    if (animationId) cancelAnimationFrame(animationId)
-    if (sourceNode.value) stopCurrentSource()
-    if (audioContext.value) {
-      audioContext.value.close()
-    }
-  }
-
-  /**
-   * 统一的资源加载方法
-   * 整合了缓存、资源加载、音频初始化的完整流程
-   */
-  const initPlayer = async (name?: string, version?: string): Promise<void> => {
+  const loadLesson = async (name: string, version: string) => {
     try {
       state.value = PlayerState.LOADING
       isLoading.value = true
       error.value = ''
 
-      // 使用参数或props中的值
-      const audioName = name || props.name
-      const audioVersion = version || props.version
-
-      if (!audioName) {
-        throw new Error('音频名称不能为空')
-      }
-
-      const basePath = `${config.basePath}/${audioVersion}`
+      const basePath = `${config.basePath}/${version}`
       const files = {
-        mp3: `${audioName}.mp3`,
-        lrc: `${audioName}.lrc`
+        mp3: `${name}.mp3`,
+        lrc: `${name}.lrc`
       }
 
       const urls = {
-        mp3: `${basePath}/${audioName}.mp3`,
-        lrc: `${basePath}/${audioName}.lrc`
+        mp3: `${basePath}/${name}.mp3`,
+        lrc: `${basePath}/${name}.lrc`
       }
 
-      // 1. 缓存音频和歌词文件
-      await Promise.all([cacheResource(files.mp3, urls.mp3), cacheResource(files.lrc, urls.lrc)])
+      // 缓存资源
+      const existsMp3 = await fileExists(files.mp3)
+      const existsLrc = await fileExists(files.lrc)
 
-      // 2. 解析歌词
-      await initLrc(files.lrc)
+      if (!existsMp3) {
+        const response = await fetch(urls.mp3)
+        const buffer = await response.arrayBuffer()
+        await cacheFile(files.mp3, buffer)
+      }
 
-      // 3. 初始化音频
-      await initAudio(files.mp3)
+      if (!existsLrc) {
+        const response = await fetch(urls.lrc)
+        const buffer = await response.arrayBuffer()
+        await cacheFile(files.lrc, buffer)
+      }
+
+      // 解析歌词
+      const lrcBuffer = await readFile(files.lrc)
+      const lrcText = new TextDecoder('utf-8').decode(lrcBuffer)
+      lrcLines.value = parseBilingualLRC(lrcText)
+
+      // 初始化音频
+      const ctx = getContext()
+      gainNode.value = ctx.createGain()
+      gainNode.value.connect(ctx.destination)
+      gainNode.value.gain.value = volume.value
+
+      const mp3Buffer = await readFile(files.mp3)
+      audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
+      duration.value = audioBuffer.value.duration
+
+      state.value = PlayerState.IDLE
+      isLoading.value = false
+
+      if (config.autoplay) play()
     } catch (err) {
       state.value = PlayerState.ERROR
       isLoading.value = false
       error.value = err instanceof Error ? err.message : '未知错误'
-      throw err // 重新抛出错误，让调用方可以处理
-    }
-  }
-
-  const cacheResource = async (name: string, url: string) => {
-    const exists = await fileExists(name)
-    if (exists) return
-
-    console.log(`正在下载${name}文件...`)
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`${name}下载失败 (${response.status})`)
-
-    const buffer = await response.arrayBuffer()
-    await cacheFile(name, buffer)
-    console.log(`${name}已缓存`)
-  }
-
-  const initLrc = async (file: string): Promise<void> => {
-    const lrcBuffer = await readFile(file)
-    const lrcText = new TextDecoder('utf-8').decode(lrcBuffer)
-    lrcLines.value = parseBilingualLRC(lrcText)
-  }
-
-  const initAudio = async (file: string): Promise<void> => {
-    // 3. 初始化音频上下文和音频数据
-    const ctx = getContext()
-
-    // 创建音量控制节点
-    gainNode.value = ctx.createGain()
-    gainNode.value.connect(ctx.destination)
-    gainNode.value.gain.value = isMuted.value ? 0 : volume.value
-
-    // 加载并解码音频数据
-    const mp3Buffer = await readFile(file)
-    audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
-    duration.value = audioBuffer.value.duration
-
-    audioReady.value = true
-    // 重置播放状态
-    offset = 0
-    currentTime.value = 0
-    state.value = PlayerState.IDLE
-    isLoading.value = false
-
-    // 4. 自动播放（如果配置了）
-    if (config.autoplay) {
-      await play()
+      throw err
     }
   }
 
@@ -433,9 +370,14 @@ export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UseP
     state.value = playing ? PlayerState.PLAYING : PlayerState.PAUSED
   })
 
-  onMounted(() => {
-    initPlayer()
-  })
+  const destroy = (): void => {
+    if (isPlaying.value) pause()
+    if (animationId) cancelAnimationFrame(animationId)
+    if (sourceNode.value) stopCurrentSource()
+    if (audioContext.value) {
+      audioContext.value.close()
+    }
+  }
 
   onUnmounted(() => {
     destroy()
@@ -461,8 +403,6 @@ export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UseP
     // 计算属性
     progress,
     audioReady,
-    formattedCurrentTime,
-    formattedDuration,
 
     // 控制方法
     play,
@@ -474,8 +414,6 @@ export function usePlayer(props: PlayerProps, options: PlayerOptions = {}): UseP
     toggleMute,
     setPlaybackRate,
     destroy,
-
-    // 资源管理
-    initPlayer
+    loadLesson
   }
 }

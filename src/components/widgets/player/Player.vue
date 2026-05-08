@@ -77,11 +77,22 @@ const {
   play,
   pause,
   resume,
-  seek
-} = usePlayer(props)
+  seek,
+  loadLesson
+} = usePlayer({
+  autoplay: false,
+  loop: false,
+  volume: 0.7,
+  basePath: 'data'
+})
 
 const handleLineClick = (line: any) => {
   seek(line.time)
+}
+
+// 加载课程
+if (props.name) {
+  loadLesson(props.name, props.version)
 }
 </script>
 

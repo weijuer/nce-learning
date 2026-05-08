@@ -13,7 +13,7 @@ const getLessonTitle = (fileName: string) => {
 }
 
 const goLesson = (name: string, version: string | number) => {
-  router.push({ name: 'lesson', params: { name, version } })
+  router.push({ name: 'Lesson', params: { name, version } })
 }
 </script>
 
@@ -46,8 +46,6 @@ const goLesson = (name: string, version: string | number) => {
         </div>
       </w-tab>
     </w-tabs>
-
-    <router-view />
   </div>
 </template>
 
