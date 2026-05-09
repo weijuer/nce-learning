@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import BackToTop from '../widgets/BackToTop.vue'
 
 const isDark = ref(false)
 
@@ -52,6 +53,7 @@ const toggleTheme = () => {
       <!-- Main content -->
       <article class="holy-grail__middle container">
         <router-view></router-view>
+        <back-to-top></back-to-top>
       </article>
 
       <!-- Right sidebar -->
@@ -64,8 +66,8 @@ const toggleTheme = () => {
       </nav> -->
     </main>
     <footer class="app-footer">
-      <div class="container">
-        <div class="copyright">© 2024 — present Weijuer. All rights reserved.</div>
+      <div class="app-footer__container container">
+        <div class="copyright">© 2016 — present Weijuer. All rights reserved.</div>
       </div>
     </footer>
   </div>
@@ -170,20 +172,18 @@ const toggleTheme = () => {
 }
 
 .container {
-  width: 100%;
-  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 clamp(1rem, 2.5vw, 1.5rem);
+  width: 100%;
+  max-width: 996px;
 }
 
 .app-header {
-  --z-nav: 200;
-
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: var(--z-nav);
+  z-index: 200;
   background: light-dark(#ffffffd9, #000000d9);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
@@ -195,7 +195,7 @@ const toggleTheme = () => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 3.5rem;
+    height: clamp(3.5rem, 10vw, 4rem);
   }
 }
 
@@ -205,13 +205,17 @@ const toggleTheme = () => {
 }
 
 .app-footer {
-  --w-footer-height: 24px;
-
-  padding: 14px 2px;
-  min-height: var(--w-footer-height);
   color: var(--color-text);
   font-size: 14px;
   background: light-dark(#ffffffd9, #000000d9);
+
+  .app-footer__container {
+    padding: 14px 2px;
+    height: clamp(3.5rem, 10vw, 4rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .split-navigation {

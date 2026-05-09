@@ -81,7 +81,7 @@ const {
   loadLesson
 } = usePlayer({
   autoplay: false,
-  loop: false,
+  loop: true,
   volume: 0.7,
   basePath: 'data'
 })
@@ -91,7 +91,7 @@ const handleLineClick = (line: any) => {
 }
 
 // 加载课程
-if (props.name) {
+if (props.name && props.version) {
   loadLesson(props.name, props.version)
 }
 </script>
@@ -239,9 +239,17 @@ if (props.name) {
   max-width: 800px;
   margin: auto;
 
+  .lyrics-section {
+    margin-bottom: var(--spacing-md);
+  }
+
   .audio-section {
     position: sticky;
     bottom: 1%;
+    animation: disappear linear;
+    animation-timeline: scroll();
+    animation-range-start: cover 0%;
+    animation-range-end: cover 100%;
   }
 }
 
@@ -308,15 +316,6 @@ if (props.name) {
       color: var(--text-primary);
       border-color: var(--text-light);
     }
-  }
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
   }
 }
 </style>

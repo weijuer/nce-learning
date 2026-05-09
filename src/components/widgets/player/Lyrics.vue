@@ -121,14 +121,14 @@ onMounted(() => {
 <template>
   <div class="lyrics">
     <!-- 当前播放行（大字体居中显示） -->
-    <div v-if="currentLine" class="current-line-display">
+    <!-- <div v-if="currentLine" class="current-line-display">
       <div class="current-line-text">
         {{ currentLine.textEn }}
       </div>
       <div v-if="showTranslation && currentLine.textZh" class="current-line-translation">
         {{ currentLine.textZh }}
       </div>
-    </div>
+    </div> -->
 
     <!-- 歌词滚动区域 -->
     <div
@@ -238,8 +238,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.5rem;
   flex: 1;
-  overflow-y: auto;
-  scroll-behavior: smooth;
+  /* overflow-y: auto;
+  scroll-behavior: smooth; */
 }
 
 .lyrics-scroll-container.has-translations .lyric-line {
@@ -249,59 +249,64 @@ onMounted(() => {
 .lyric-line {
   padding: 16px 20px;
   cursor: pointer;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.05);
   transition: all 0.3s ease;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(5px);
-}
+  animation:
+    fadeIn linear,
+    fadeOut linear;
+  animation-timeline: view(), view();
+  animation-range: entry, exit;
 
-.lyric-line:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 
-.lyric-line.active {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-}
+  &.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--border-color-dim);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  }
 
-.lyric-line.past {
-  opacity: 0.6;
-}
+  &.past {
+    opacity: 0.6;
+  }
 
-.lyric-line.future {
-  opacity: 0.4;
-}
+  &.future {
+    opacity: 0.4;
+  }
 
-.lyric-line.has-translation {
-  padding: 20px;
-}
+  &.has-translation {
+    padding: 20px;
+  }
 
-.english-text {
-  font-size: 1.3rem;
-  font-weight: 500;
-  line-height: 1.4;
-  margin-bottom: 8px;
-}
+  .english-text {
+    font-size: 1.3rem;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
 
-.chinese-text {
-  font-size: 1.1rem;
-  opacity: 0.8;
-  line-height: 1.4;
-  font-style: italic;
-}
+  .chinese-text {
+    font-size: 1.1rem;
+    opacity: 0.8;
+    line-height: 1.4;
+    font-style: italic;
+  }
 
-.time-indicator {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  font-size: 0.8rem;
-  opacity: 0.6;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 8px;
-  border-radius: 12px;
+  .time-indicator {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    opacity: 0.6;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
 }
 
 .control-panel {
@@ -312,49 +317,49 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
 
-.control-buttons {
-  display: flex;
-  gap: 8px;
-}
+  .control-buttons {
+    display: flex;
+    gap: 8px;
 
-.control-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(5px);
-}
+    .control-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(5px);
 
-.control-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
-}
+      &:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-1px);
+      }
 
-.btn-icon {
-  font-size: 1rem;
-}
+      .btn-icon {
+        font-size: 1rem;
+      }
 
-.btn-text {
-  font-weight: 500;
-}
+      .btn-text {
+        font-weight: 500;
+      }
+    }
+  }
 
-.progress-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.8;
+  .progress-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+  }
 }
 
 .time-separator {

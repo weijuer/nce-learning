@@ -18,6 +18,8 @@
   --color-green-dim: light-dark(#00aa2a, #00cc6a);
   --color-green-glow: light-dark(rgba(0, 255, 65, 0.25), rgba(0, 255, 136, 0.3));
   --color-border: light-dark(#e5e4e7, #333333);
+  --color-border-dim: light-dark(#ccc, #333333);
+  --color-border-muted: light-dark(#999, #6b6b6b);
   --color-disabled: light-dark(#ddd, #333333);
 
   --font-display: 'Space Grotesk', system-ui, sans-serif;
@@ -87,5 +89,44 @@
 
   &.btn-secondary {
     --btn-color: var(--w-color-secondary);
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes disappear {
+  from {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
