@@ -43,6 +43,6 @@ const scrollToTop = () => {
   animation: appear linear;
   animation-timeline: scroll();
   animation-range-start: cover 0%;
-  animation-range-end: exit 80%;
+  animation-range-end: cover 100%;
 }
 </style>

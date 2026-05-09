@@ -120,6 +120,10 @@
   from {
     opacity: 1;
   }
+  to {
+    transform: translateY(360%);
+    opacity: 0;
+  }
 }
 
 @keyframes spin {

@@ -248,8 +248,8 @@ if (props.name && props.version) {
     bottom: 1%;
     animation: disappear linear;
     animation-timeline: scroll();
-    animation-range-start: cover 0%;
-    animation-range-end: cover 100%;
+    animation-range-start: contain 0%;
+    animation-range-end: contain 85%;
   }
 }
 
