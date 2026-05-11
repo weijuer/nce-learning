@@ -406,10 +406,9 @@ if (props.name && props.version) {
 .audio-section {
   position: sticky;
   bottom: 1%;
-  animation: disappear linear;
+  animation: fadeOutUp linear forwards;
   animation-timeline: scroll();
-  animation-range-start: contain 0%;
-  animation-range-end: contain 85%;
+  animation-range: entry;
 }
 
 .btn-container {

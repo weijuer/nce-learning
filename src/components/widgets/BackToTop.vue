@@ -40,9 +40,8 @@ const scrollToTop = () => {
   cursor: pointer;
   transition: all 0.2s linear;
   box-shadow: var(--color-shadow);
-  animation: appear linear;
+  animation: fadeInUp linear;
   animation-timeline: scroll();
-  animation-range-start: cover 0%;
-  animation-range-end: cover 100%;
+  animation-range: entry;
 }
 </style>
