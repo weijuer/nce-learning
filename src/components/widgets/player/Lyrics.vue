@@ -13,7 +13,7 @@ interface Props {
 }
 
 interface Emits {
-  (e: 'line-click', line: LRCLine): void
+  (e: 'line-click', index: number): void
   (e: 'seek', time: number): void
 }
 
@@ -59,9 +59,8 @@ watch(
 /**
  * 点击歌词行
  */
-function handleLineClick(line: LRCLine): void {
-  emit('line-click', line)
-  // emit('seek', line.time)
+function handleLineClick(index: number): void {
+  emit('line-click', index)
 }
 
 /**
@@ -150,7 +149,7 @@ onMounted(() => {
           past: index < currentLineIndex,
           future: index > currentLineIndex
         }"
-        @click="() => handleLineClick(line)"
+        @click="() => handleLineClick(index)"
       >
         <div class="english-text">{{ line.textEn }}</div>
         <div v-if="showTranslation && line.textZh" class="chinese-text">

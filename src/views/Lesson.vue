@@ -37,11 +37,6 @@ const description = computed(() => {
     </header>
 
     <Player :name="name" :version="version" />
-
-    <div class="btn-container">
-      <button class="btn btn-secondary">上一课</button>
-      <button class="btn btn-secondary">下一课</button>
-    </div>
   </div>
 </template>
 
@@ -52,11 +47,5 @@ const description = computed(() => {
   top: clamp(56px, 15vw, 65px);
   z-index: 100;
   backdrop-filter: blur(10px);
-}
-
-.btn-container {
-  margin: 1.5rem 0;
-  display: flex;
-  justify-content: space-between;
 }
 </style>

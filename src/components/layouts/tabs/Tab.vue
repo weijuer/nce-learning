@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
-import type { TabsProvider } from './tabs.vue'
+import type { TabsProvider } from './Tabs.vue'
 
 export interface Tab {
   title: string
@@ -66,24 +66,4 @@ const isActive = computed(() => tabs.activeIndex.value === index.value)
   </div>
 </template>
 
-<style scoped>
-.w-tab {
-  animation: fadeIn 0.3s ease;
-
-  .w-tab-content {
-    line-height: 1.6;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-</style>
+<style scoped></style>

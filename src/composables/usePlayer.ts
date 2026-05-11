@@ -1,11 +1,11 @@
-import { ref, computed, watch, onUnmounted, shallowRef } from 'vue'
+import { ref, computed, onUnmounted, shallowRef, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import { useOPFS } from './useOPFS'
 import { parseBilingualLRC } from '../utils/lrc-parser'
 import type { LRCLine } from '../types'
 
 /**
- * 音频播放器状态枚举
+ * 音频播放器状态常量
  */
 export const PlayerState = {
   IDLE: 'idle',
@@ -22,18 +22,16 @@ export type PlayerState = (typeof PlayerState)[keyof typeof PlayerState]
  * 播放器配置选项
  */
 export interface PlayerOptions {
-  /** 是否自动播放 */
   autoplay?: boolean
-  /** 是否循环播放 */
   loop?: boolean
-  /** 音量 (0-1) */
   volume?: number
-  /** 播放速率 (0.5-4) */
   playbackRate?: number
-  /** 音频加载超时时间（毫秒） */
-  loadTimeout?: number
-  /** 资源基础路径 */
   basePath?: string
+
+  // 字幕循环播放设置
+  enableSentenceLoop?: boolean
+  sentenceLoopCount?: number
+  continueAfterLoop?: boolean
 }
 
 /**
@@ -59,6 +57,8 @@ export interface UsePlayerReturn {
   // 计算属性
   progress: Ref<number>
   audioReady: Ref<boolean>
+  formattedCurrentTime: Ref<string>
+  formattedDuration: Ref<string>
 
   // 控制方法
   play: (fromTime?: number) => void
@@ -73,23 +73,39 @@ export interface UsePlayerReturn {
 
   // 资源管理
   loadLesson: (name: string, version: string) => Promise<void>
+
+  // 课程切换
+  nextLesson: () => void
+  prevLesson: () => void
+
+  // 字幕播放
+  playSentence: (lineIndex: number) => void
+
+  // 设置
+  settings: {
+    enableSentenceLoop: Ref<boolean>
+    sentenceLoopCount: Ref<number>
+    continueAfterLoop: Ref<boolean>
+  }
+
+  // 滚动引用
+  lyricsContainerRef: Ref<HTMLElement | null>
 }
 
 /**
  * 专业音频播放器组合式函数
  * 集成音频播放、歌词同步、资源缓存、音量控制等功能
- *
- * @param options - 播放器配置选项
- * @returns 播放器实例
  */
 export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
-  // 默认配置
   const config = {
     autoplay: false,
     loop: false,
     volume: 0.7,
     playbackRate: 1.0,
     basePath: 'data',
+    enableSentenceLoop: true,
+    sentenceLoopCount: 3,
+    continueAfterLoop: true,
     ...options
   }
 
@@ -103,6 +119,14 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   let startTime = 0
   let offset = 0
   let animationId: number | null = null
+
+  // 字幕循环状态
+  let currentSentenceIndex = -1
+  let sentenceLoopCount = 0
+
+  // 课程信息
+  let currentLessonName = ''
+  let currentVersion = ''
 
   // 响应式状态
   const state = ref<PlayerState>(PlayerState.IDLE)
@@ -118,6 +142,14 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   const lrcLines = ref<LRCLine[]>([])
   const currentLineIndex = ref(-1)
 
+  // 设置
+  const enableSentenceLoop = ref(config.enableSentenceLoop)
+  const sentenceLoopCountSetting = ref(config.sentenceLoopCount)
+  const continueAfterLoop = ref(config.continueAfterLoop)
+
+  // 滚动容器引用
+  const lyricsContainerRef = ref<HTMLElement | null>(null)
+
   // 组合式函数
   const { cacheFile, readFile, fileExists } = useOPFS()
 
@@ -127,6 +159,16 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   )
 
   const progress = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0))
+
+  const formattedCurrentTime = computed(() => formatTime(currentTime.value))
+  const formattedDuration = computed(() => formatTime(duration.value))
+
+  // 辅助函数
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   const getContext = (): AudioContext => {
     if (!audioContext.value) {
@@ -151,6 +193,38 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     }
   }
 
+  const scrollToCurrentLine = async (): Promise<void> => {
+    await nextTick()
+    const container = lyricsContainerRef.value
+    if (!container) return
+
+    const activeLine = container.querySelector('.lyric-line.active') as HTMLElement
+    if (!activeLine) return
+
+    const containerRect = container.getBoundingClientRect()
+    const lineRect = activeLine.getBoundingClientRect()
+
+    // 计算滚动位置，使当前行居中显示
+    const scrollTop = activeLine.offsetTop - container.offsetHeight / 2 + lineRect.height / 2
+
+    container.scrollTo({
+      top: Math.max(0, scrollTop),
+      behavior: 'smooth'
+    })
+  }
+
+  const updateCurrentLine = (time: number): void => {
+    const idx = lrcLines.value.findLastIndex(line => line.time <= time)
+    if (idx !== currentLineIndex.value) {
+      currentLineIndex.value = idx
+
+      // 自动滚动到当前字幕
+      if (idx >= 0) {
+        scrollToCurrentLine()
+      }
+    }
+  }
+
   const updateTime = (): void => {
     if (!audioContext.value || !isPlaying.value) return
 
@@ -161,13 +235,40 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     // 更新歌词显示
     updateCurrentLine(currentTime.value)
 
+    // 检查是否到达当前句子末尾
+    checkSentenceEnd()
+
     animationId = requestAnimationFrame(updateTime)
   }
 
-  const updateCurrentLine = (time: number): void => {
-    const idx = lrcLines.value.findLastIndex(line => line.time <= time)
-    if (idx !== currentLineIndex.value) {
-      currentLineIndex.value = idx
+  const checkSentenceEnd = (): void => {
+    if (!enableSentenceLoop.value || currentSentenceIndex < 0) return
+
+    const currentSentence = lrcLines.value[currentSentenceIndex]
+    if (!currentSentence) return
+
+    // 获取下一句的时间（作为当前句的结束时间）
+    const nextSentence = lrcLines.value[currentSentenceIndex + 1]
+    const sentenceEndTime = nextSentence ? nextSentence.time : duration.value
+
+    // 检查是否到达句子末尾
+    if (currentTime.value >= sentenceEndTime - 0.1) {
+      // 留一点余量
+      sentenceLoopCount++
+
+      if (sentenceLoopCount < sentenceLoopCountSetting.value) {
+        // 重新播放当前句子
+        seek(currentSentence.time)
+      } else {
+        // 循环完成
+        currentSentenceIndex = -1
+        sentenceLoopCount = 0
+
+        if (!continueAfterLoop.value) {
+          pause()
+        }
+        // 如果 continueAfterLoop 为 true，继续播放下一句（自然继续）
+      }
     }
   }
 
@@ -187,32 +288,30 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     source.onended = () => {
       isPlaying.value = false
       state.value = PlayerState.ENDED
+      currentSentenceIndex = -1
+      sentenceLoopCount = 0
     }
 
     return source
   }
 
-  // 播放控制方法
   const play = (fromTime?: number): void => {
     if (!audioBuffer.value || !audioContext.value) return
 
     const ctx = getContext()
-    // 如果已经在播放，先停止当前播放
+
     if (isPlaying.value) {
       stopCurrentSource()
     }
 
-    // 如果已经到达末尾，从头开始
     if (currentTime.value >= duration.value) {
       offset = 0
       currentTime.value = 0
     }
 
-    // 创建新源节点
     sourceNode.value = createSourceNode()
     if (!sourceNode.value) return
 
-    // 记录开始时间
     startTime = ctx.currentTime
     const startOffset = fromTime !== undefined ? fromTime : offset
     sourceNode.value.start(0, startOffset)
@@ -221,7 +320,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     state.value = PlayerState.PLAYING
     offset = startOffset
 
-    // 启动时间更新循环
     if (animationId) cancelAnimationFrame(animationId)
     animationId = requestAnimationFrame(updateTime)
   }
@@ -229,12 +327,10 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   const pause = (): void => {
     if (!audioContext.value || !isPlaying.value) return
 
-    // 记录当前播放位置
     const elapsed = audioContext.value.currentTime - startTime + offset
     offset = Math.min(elapsed, duration.value)
     currentTime.value = offset
 
-    // 停止源节点
     stopCurrentSource()
     isPlaying.value = false
     state.value = PlayerState.PAUSED
@@ -264,23 +360,18 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     const wasPlaying = isPlaying.value
 
     if (wasPlaying) {
-      // 如果正在播放，先暂停
       pause()
     }
 
-    // 更新播放位置
     offset = newTime
     currentTime.value = newTime
 
     if (wasPlaying) {
-      // 如果之前正在播放，从新位置继续播放
       play(newTime)
     } else {
-      // 暂停状态只更新位置
       stopCurrentSource()
     }
 
-    // 更新歌词显示
     updateCurrentLine(currentTime.value)
   }
 
@@ -305,11 +396,32 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     }
   }
 
+  const playSentence = (lineIndex: number): void => {
+    if (lineIndex < 0 || lineIndex >= lrcLines.value.length) return
+
+    const line = lrcLines.value[lineIndex]
+
+    // 设置当前句子索引和循环计数
+    currentSentenceIndex = lineIndex
+    sentenceLoopCount = 0
+
+    // 跳转到句子开始位置并播放
+    seek(line.time)
+
+    if (!isPlaying.value) {
+      play()
+    }
+  }
+
   const loadLesson = async (name: string, version: string) => {
     try {
       state.value = PlayerState.LOADING
       isLoading.value = true
       error.value = ''
+
+      // 更新当前课程信息
+      currentLessonName = name
+      currentVersion = version
 
       const basePath = `${config.basePath}/${version}`
       const files = {
@@ -347,14 +459,22 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       const ctx = getContext()
       gainNode.value = ctx.createGain()
       gainNode.value.connect(ctx.destination)
-      gainNode.value.gain.value = volume.value
+      gainNode.value.gain.value = isMuted.value ? 0 : volume.value
 
       const mp3Buffer = await readFile(files.mp3)
       audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
       duration.value = audioBuffer.value.duration
 
+      audioReady.value = true
       state.value = PlayerState.IDLE
       isLoading.value = false
+
+      // 重置播放状态
+      offset = 0
+      currentTime.value = 0
+      currentLineIndex.value = -1
+      currentSentenceIndex = -1
+      sentenceLoopCount = 0
 
       if (config.autoplay) play()
     } catch (err) {
@@ -365,10 +485,33 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     }
   }
 
-  // 状态同步
-  watch(isPlaying, playing => {
-    state.value = playing ? PlayerState.PLAYING : PlayerState.PAUSED
-  })
+  const nextLesson = (): void => {
+    // 这里需要根据实际的课程列表来实现
+    // 可以通过解析当前课程名称来推断下一课
+    if (!currentLessonName) return
+
+    const lessonMatch = currentLessonName.match(/(\d+)－/)
+    if (lessonMatch) {
+      const currentNum = parseInt(lessonMatch[1])
+      const nextNum = currentNum + 1
+      const nextName = currentLessonName.replace(/^\d+/, nextNum.toString())
+      loadLesson(nextName, currentVersion)
+    }
+  }
+
+  const prevLesson = (): void => {
+    if (!currentLessonName) return
+
+    const lessonMatch = currentLessonName.match(/(\d+)－/)
+    if (lessonMatch) {
+      const currentNum = parseInt(lessonMatch[1])
+      if (currentNum > 1) {
+        const prevNum = currentNum - 1
+        const prevName = currentLessonName.replace(/^\d+/, prevNum.toString())
+        loadLesson(prevName, currentVersion)
+      }
+    }
+  }
 
   const destroy = (): void => {
     if (isPlaying.value) pause()
@@ -384,7 +527,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   })
 
   return {
-    // 基础状态
     state,
     currentTime,
     duration,
@@ -394,17 +536,13 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     volume,
     isMuted,
     playbackRate,
-
-    // 歌词相关
     lrcLines,
     currentLineIndex,
     currentLine,
-
-    // 计算属性
     progress,
     audioReady,
-
-    // 控制方法
+    formattedCurrentTime,
+    formattedDuration,
     play,
     pause,
     resume,
@@ -414,6 +552,15 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     toggleMute,
     setPlaybackRate,
     destroy,
-    loadLesson
+    loadLesson,
+    nextLesson,
+    prevLesson,
+    playSentence,
+    settings: {
+      enableSentenceLoop,
+      sentenceLoopCount: sentenceLoopCountSetting,
+      continueAfterLoop
+    },
+    lyricsContainerRef
   }
 }

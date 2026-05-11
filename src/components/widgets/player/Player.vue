@@ -20,14 +20,35 @@
       <div class="error-content">
         <h4>Loading Error</h4>
         <p>{{ error }}</p>
-        <!-- <button class="retry-btn" @click="initPlayer">重试</button> -->
+        <button class="retry-btn" @click="retryLoad">重试</button>
       </div>
     </div>
 
     <!-- 主内容区域 -->
     <div v-if="!isLoading && !error" class="player-content">
+      <!-- 设置区域 -->
+      <div class="settings-section">
+        <label class="setting-item">
+          <input type="checkbox" v-model="settings.enableSentenceLoop" />
+          <span>句子循环播放</span>
+        </label>
+        <label class="setting-item" v-if="settings.enableSentenceLoop">
+          <span>循环次数:</span>
+          <select v-model="settings.sentenceLoopCount">
+            <option :value="1">1次</option>
+            <option :value="2">2次</option>
+            <option :value="3">3次</option>
+            <option :value="5">5次</option>
+          </select>
+        </label>
+        <label class="setting-item" v-if="settings.enableSentenceLoop">
+          <input type="checkbox" v-model="settings.continueAfterLoop" />
+          <span>循环后继续播放</span>
+        </label>
+      </div>
+
       <!-- 歌词显示区域 -->
-      <section class="lyrics-section">
+      <section class="lyrics-section" ref="lyricsContainerRef">
         <Lyrics
           :lrc-lines="lrcLines"
           :current-line-index="currentLineIndex"
@@ -41,12 +62,48 @@
           :is-playing="isPlaying"
           :current-time="currentTime"
           :duration="duration"
+          :formatted-current-time="formattedCurrentTime"
+          :formatted-duration="formattedDuration"
+          :progress="progress"
           @seek="seek"
           @play="play"
           @pause="pause"
-          @resume="resume"
+          @toggle-play="togglePlay"
         />
       </section>
+
+      <div class="btn-container">
+        <button @click="prevLesson" class="btn btn-secondary" title="上一课">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <button @click="nextLesson" class="btn btn-secondary" title="下一课">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -74,20 +131,37 @@ const {
   lrcLines,
   currentLineIndex,
   error,
+  progress,
+  formattedCurrentTime,
+  formattedDuration,
+  settings,
   play,
   pause,
-  resume,
+  togglePlay,
   seek,
-  loadLesson
+  loadLesson,
+  nextLesson,
+  prevLesson,
+  playSentence
 } = usePlayer({
   autoplay: false,
   loop: true,
   volume: 0.7,
-  basePath: 'data'
+  basePath: 'data',
+  enableSentenceLoop: true,
+  sentenceLoopCount: 3,
+  continueAfterLoop: true
 })
 
-const handleLineClick = (line: any) => {
-  seek(line.time)
+const handleLineClick = (index: number) => {
+  // 使用 playSentence 实现点击字幕播放，支持循环
+  playSentence(index)
+}
+
+const retryLoad = () => {
+  if (props.name && props.version) {
+    loadLesson(props.name, props.version)
+  }
 }
 
 // 加载课程
@@ -238,19 +312,6 @@ if (props.name && props.version) {
 .player-content {
   max-width: 800px;
   margin: auto;
-
-  .lyrics-section {
-    margin-bottom: var(--spacing-md);
-  }
-
-  .audio-section {
-    position: sticky;
-    bottom: 1%;
-    animation: disappear linear;
-    animation-timeline: scroll();
-    animation-range-start: contain 0%;
-    animation-range-end: contain 85%;
-  }
 }
 
 .player-header {
@@ -279,31 +340,20 @@ if (props.name && props.version) {
     font-size: 2.5rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 var(--spacing-sm) 0;
+    margin: 0;
     line-height: 1.2;
-  }
-
-  .lesson-meta {
-    display: flex;
-    gap: var(--spacing-md);
-
-    .meta-item {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--text-secondary);
-      font-size: 0.875rem;
-
-      svg {
-        opacity: 0.7;
-      }
-    }
   }
 }
 
 .header-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+
   .action-btn {
-    background: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
     padding: 0.5rem;
@@ -314,8 +364,66 @@ if (props.name && props.version) {
     &:hover {
       background: var(--bg-tertiary);
       color: var(--text-primary);
-      border-color: var(--text-light);
+      border-color: var(--primary-color);
     }
+  }
+}
+
+.settings-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-lg);
+
+  .setting-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+
+    select {
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-sm);
+      padding: 0.25rem 0.5rem;
+      background: white;
+      color: var(--text-primary);
+    }
+
+    input[type='checkbox'] {
+      cursor: pointer;
+    }
+  }
+}
+
+.lyrics-section {
+  margin-bottom: var(--spacing-md);
+}
+
+.audio-section {
+  position: sticky;
+  bottom: 1%;
+  animation: disappear linear;
+  animation-timeline: scroll();
+  animation-range-start: contain 0%;
+  animation-range-end: contain 85%;
+}
+
+.btn-container {
+  margin: 1.5rem 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>
