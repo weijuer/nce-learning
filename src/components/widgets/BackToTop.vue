@@ -34,6 +34,7 @@ const scrollToTop = () => {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   color: var(--color-text-dim);
+  opacity: 0;
   display: flex;
   align-items: center;
   justify-content: center;

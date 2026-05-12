@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import BackToTop from '../widgets/BackToTop.vue'
 
 const isDark = ref(false)
 
+onMounted(() => {
+  const root = document.documentElement
+  isDark.value =
+    root.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches
+})
+
 const toggleTheme = () => {
   isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
+  const root = document.documentElement
+  root.classList.toggle('dark', isDark.value)
+  root.classList.toggle('light', !isDark.value)
 }
 </script>
 
