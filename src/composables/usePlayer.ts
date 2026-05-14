@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted, shallowRef, nextTick } from 'vue'
+import { ref, computed, onUnmounted, shallowRef, nextTick, reactive } from 'vue'
 import type { Ref } from 'vue'
 import { useOPFS } from './useOPFS'
 import { parseBilingualLRC } from '../utils/lrc-parser'
@@ -83,9 +83,9 @@ export interface UsePlayerReturn {
 
   // 设置
   settings: {
-    enableSentenceLoop: Ref<boolean>
-    sentenceLoopCount: Ref<number>
-    continueAfterLoop: Ref<boolean>
+    enableSentenceLoop: boolean
+    sentenceLoopCount: number
+    continueAfterLoop: boolean
   }
 
   // 滚动引用
@@ -142,10 +142,11 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   const lrcLines = ref<LRCLine[]>([])
   const currentLineIndex = ref(-1)
 
-  // 设置
-  const enableSentenceLoop = ref(config.enableSentenceLoop)
-  const sentenceLoopCountSetting = ref(config.sentenceLoopCount)
-  const continueAfterLoop = ref(config.continueAfterLoop)
+  const settings = reactive({
+    enableSentenceLoop: config.enableSentenceLoop,
+    sentenceLoopCount: config.sentenceLoopCount,
+    continueAfterLoop: config.continueAfterLoop
+  })
 
   // 滚动容器引用
   const lyricsContainerRef = ref<HTMLElement | null>(null)
@@ -195,7 +196,7 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
 
   const scrollToCurrentLine = async (): Promise<void> => {
     await nextTick()
-    const container = lyricsContainerRef.value
+    const container = lyricsContainerRef.value || document.body
     if (!container) return
 
     const activeLine = container.querySelector('.lyric-line.active') as HTMLElement
@@ -242,7 +243,7 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   }
 
   const checkSentenceEnd = (): void => {
-    if (!enableSentenceLoop.value || currentSentenceIndex < 0) return
+    if (!settings.enableSentenceLoop || currentSentenceIndex < 0) return
 
     const currentSentence = lrcLines.value[currentSentenceIndex]
     if (!currentSentence) return
@@ -256,15 +257,15 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       // 留一点余量
       sentenceLoopCount++
 
-      if (sentenceLoopCount < sentenceLoopCountSetting.value) {
+      if (sentenceLoopCount < settings.sentenceLoopCount) {
         // 重新播放当前句子
         seek(currentSentence.time)
       } else {
-        // 循环完成
+        // 循环完成，重置状态
         currentSentenceIndex = -1
         sentenceLoopCount = 0
 
-        if (!continueAfterLoop.value) {
+        if (!settings.continueAfterLoop) {
           pause()
         }
         // 如果 continueAfterLoop 为 true，继续播放下一句（自然继续）
@@ -300,13 +301,17 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
 
     const ctx = getContext()
 
-    if (isPlaying.value) {
-      stopCurrentSource()
-    }
-
+    // 如果已经播放完成，重置到开头
     if (currentTime.value >= duration.value) {
       offset = 0
       currentTime.value = 0
+      currentLineIndex.value = -1
+      currentSentenceIndex = -1
+      sentenceLoopCount = 0
+    }
+
+    if (isPlaying.value) {
+      stopCurrentSource()
     }
 
     sourceNode.value = createSourceNode()
@@ -401,9 +406,14 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
 
     const line = lrcLines.value[lineIndex]
 
-    // 设置当前句子索引和循环计数
-    currentSentenceIndex = lineIndex
-    sentenceLoopCount = 0
+    // 只有在启用句子循环时才设置循环状态
+    if (settings.enableSentenceLoop) {
+      currentSentenceIndex = lineIndex
+      sentenceLoopCount = 0
+    } else {
+      currentSentenceIndex = -1
+      sentenceLoopCount = 0
+    }
 
     // 跳转到句子开始位置并播放
     seek(line.time)
@@ -411,6 +421,11 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     if (!isPlaying.value) {
       play()
     }
+
+    // 确保滚动到当前句子
+    nextTick(() => {
+      updateCurrentLine(line.time)
+    })
   }
 
   const loadLesson = async (name: string, version: string) => {
@@ -556,11 +571,7 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     nextLesson,
     prevLesson,
     playSentence,
-    settings: {
-      enableSentenceLoop,
-      sentenceLoopCount: sentenceLoopCountSetting,
-      continueAfterLoop
-    },
+    settings,
     lyricsContainerRef
   }
 }

@@ -66,9 +66,7 @@
           :formatted-duration="formattedDuration"
           :progress="progress"
           @seek="seek"
-          @play="play"
-          @pause="pause"
-          @toggle-play="togglePlay"
+          @play="togglePlay"
         />
       </section>
 
@@ -135,8 +133,6 @@ const {
   formattedCurrentTime,
   formattedDuration,
   settings,
-  play,
-  pause,
   togglePlay,
   seek,
   loadLesson,
@@ -406,7 +402,7 @@ if (props.name && props.version) {
 .audio-section {
   position: sticky;
   bottom: 1%;
-  animation: fadeOutUp linear forwards;
+  animation: fadeOutUp linear;
   animation-timeline: scroll();
   animation-range: entry;
 }

@@ -84,6 +84,8 @@ interface Props {
   isPlaying?: boolean
   currentTime?: number
   duration?: number
+  volume?: number
+  isMuted?: boolean
 }
 
 interface Emits {
@@ -91,6 +93,8 @@ interface Emits {
   (e: 'play'): void
   (e: 'pause'): void
   (e: 'resume'): void
+  (e: 'toggle-mute'): void
+  (e: 'set-volume', volume: number): void
 }
 
 const { isPlaying = false, currentTime = 0, duration = 0 } = defineProps<Props>()
@@ -109,23 +113,13 @@ const progressPercentage = computed(() => {
 })
 
 // 播放/暂停切换
-const togglePlay = async () => {
-  try {
-    if (isPlaying) {
-      emit('pause')
-    } else if (duration > 0) {
-      emit('resume')
-    } else {
-      emit('play')
-    }
-  } catch (error) {
-    console.error('播放失败:', error)
-  }
+const togglePlay = () => {
+  emit('play')
 }
 
 // 静音切换
 const toggleMute = () => {
-  isMuted.value = !isMuted.value
+  emit('toggle-mute')
 }
 
 // 设置音量
