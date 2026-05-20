@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import Icon from '../icon'
+import { Icon } from '@iconify/vue'
 import Button from '../button'
 
 export interface drawerProps {
@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<drawerProps>(), {
   position: 'right',
   title: '',
   width: '100%',
-  height: '300px',
+  height: '100%',
   overlay: true,
   overlayOpacity: 0.45,
   overlayClose: true,
@@ -177,7 +177,7 @@ defineExpose({
             aria-label="关闭抽屉"
             @click="close"
           >
-            <Icon class="i-carbon:close" />
+            <Icon icon="mdi:close" />
           </Button>
         </div>
 
@@ -185,7 +185,7 @@ defineExpose({
           <slot />
         </div>
 
-        <div class="w-drawer__footer">
+        <div v-if="$slots.footer" class="w-drawer__footer">
           <slot name="footer" />
         </div>
       </div>
@@ -213,7 +213,7 @@ defineExpose({
           aria-label="关闭抽屉"
           @click="close"
         >
-          <Icon class="i-carbon:close" />
+          <Icon icon="mdi:close" />
         </Button>
       </div>
 

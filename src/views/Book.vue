@@ -1,20 +1,63 @@
 <script name="book" setup lang="ts">
-import { ref } from 'vue'
-import { WTabs, WTab } from '@/components/layouts'
+import { reactive, ref, watch } from 'vue'
+import { WTabs, WTab, WDrawer } from '@/components/layouts'
+import { Player, MiniPlayer } from 'Widgets'
+
 import { NCE_JSON } from '@/utils/nce-data'
 import { useRouter } from 'vue-router'
+import { usePlayer } from 'Composables/usePlayer'
 
 const books = ref(NCE_JSON || {})
 
 const router = useRouter()
+const state = reactive({
+  isOpen: false,
+  title: '',
+  description: '',
+  name: '',
+  version: ''
+})
+
+const showMiniPlayer = ref(false)
+const hasPlayHistory = ref(false)
+
+const {
+  isPlaying,
+  currentTime,
+  duration,
+  loadLesson
+} = usePlayer()
 
 const getLessonTitle = (fileName: string) => {
   return 'Lesson ' + fileName.split('－')[0]
 }
 
 const goLesson = (name: string, version: string | number) => {
-  router.push({ name: 'Lesson', params: { name, version } })
+  state.isOpen = true
+  state.title = getLessonTitle(name)
+  state.description = name
+  state.name = name
+  state.version = version as string
+  
+  loadLesson(name, version as string)
 }
+
+const handleDrawerClose = () => {
+  if (currentTime.value > 0 || isPlaying.value) {
+    hasPlayHistory.value = true
+    showMiniPlayer.value = true
+  }
+}
+
+const openDrawer = () => {
+  state.isOpen = true
+}
+
+watch(isPlaying, (playing) => {
+  if (!playing && currentTime.value === 0) {
+    showMiniPlayer.value = false
+  }
+})
 </script>
 
 <template>
@@ -46,12 +89,31 @@ const goLesson = (name: string, version: string | number) => {
         </div>
       </w-tab>
     </w-tabs>
+
+    <w-drawer
+      v-model="state.isOpen"
+      position="bottom"
+      height="clamp(85%, 440px, 95%)"
+      title="播放器"
+      getContainer="body"
+      close-on-click-overlay
+      @update:model-value="(val) => !val && handleDrawerClose()"
+    >
+      <Player :name="state.name" :version="state.version" />
+    </w-drawer>
+
+    <MiniPlayer
+      v-if="hasPlayHistory"
+      :class="{ active: showMiniPlayer }"
+      @open-drawer="openDrawer"
+    />
   </div>
 </template>
 
 <style>
 .book {
   padding: 2rem;
+  padding-bottom: calc(2rem + 70px);
   display: flex;
   flex-direction: column;
 

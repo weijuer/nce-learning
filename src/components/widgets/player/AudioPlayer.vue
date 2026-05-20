@@ -1,8 +1,6 @@
 <template>
   <div class="audio-player">
-    <!-- 音频控制区域 -->
     <div class="audio-controls">
-      <!-- 播放/暂停按钮 -->
       <button class="play-pause-btn" @click="togglePlay" :disabled="duration === 0">
         <svg v-if="!isPlaying" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z" />
@@ -12,12 +10,9 @@
         </svg>
       </button>
 
-      <!-- 进度条和时间显示 -->
       <div class="progress-section">
-        <!-- 当前时间 -->
-        <span class="time current-time">{{ formatTime(currentTime) }}</span>
+        <span class="time current-time">{{ formattedCurrentTime }}</span>
 
-        <!-- 进度条 -->
         <div class="progress-bar-container" @click="seekToPosition">
           <div class="progress-bar-background">
             <div class="progress-bar-fill" :style="{ width: progressPercentage + '%' }"></div>
@@ -29,11 +24,9 @@
           </div>
         </div>
 
-        <!-- 总时间 -->
-        <span class="time total-time">{{ formatTime(duration) }}</span>
+        <span class="time total-time">{{ formattedDuration }}</span>
       </div>
 
-      <!-- 音量控制 -->
       <div class="volume-control">
         <button class="volume-btn" @click="toggleMute" :title="isMuted ? '取消静音' : '静音'">
           <svg v-if="isMuted" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -59,9 +52,8 @@
           </svg>
         </button>
 
-        <!-- 音量滑块 -->
         <div class="volume-slider-container">
-          <div class="volume-slider" @click="setVolume">
+          <div class="volume-slider" @click="handleVolumeClick">
             <div class="volume-slider-background">
               <div
                 class="volume-slider-fill"
@@ -76,102 +68,79 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { formatTime } from 'Utils/common'
+import { computed } from 'vue'
+import { usePlayer } from 'Composables/usePlayer'
 
-interface Props {
-  autoPlay?: boolean
-  isPlaying?: boolean
-  currentTime?: number
-  duration?: number
-  volume?: number
-  isMuted?: boolean
-}
-
-interface Emits {
-  (e: 'seek', time: number): void
-  (e: 'play'): void
-  (e: 'pause'): void
-  (e: 'resume'): void
-  (e: 'toggle-mute'): void
-  (e: 'set-volume', volume: number): void
-}
-
-const { isPlaying = false, currentTime = 0, duration = 0 } = defineProps<Props>()
-
-const emit = defineEmits<Emits>()
-
-// 响应式状态
-const volume = ref(0.7)
-const isMuted = ref(false)
-const isDragging = ref(false)
-
-// 计算属性
-const progressPercentage = computed(() => {
-  if (duration === 0) return 0
-  return (currentTime / duration) * 100
+const {
+  isPlaying,
+  currentTime,
+  duration,
+  volume,
+  isMuted,
+  progress,
+  formattedCurrentTime,
+  formattedDuration,
+  togglePlay,
+  seek,
+  setVolume,
+  toggleMute
+} = usePlayer({
+  autoplay: false,
+  loop: true,
+  volume: 0.7,
+  basePath: 'data',
+  timeout: 30000,
+  maxRetries: 3,
+  retryDelay: 2000,
+  enableSentenceLoop: true,
+  sentenceLoopCount: 3,
+  continueAfterLoop: true
 })
 
-// 播放/暂停切换
-const togglePlay = () => {
-  emit('play')
-}
+const progressPercentage = computed(() => {
+  if (duration.value === 0) return 0
+  return (currentTime.value / duration.value) * 100
+})
 
-// 静音切换
-const toggleMute = () => {
-  emit('toggle-mute')
-}
-
-// 设置音量
-const setVolume = (event: MouseEvent) => {
-  const slider = event.currentTarget as HTMLElement
-  const rect = slider.getBoundingClientRect()
-  const clickX = event.clientX - rect.left
-  const newVolume = Math.max(0, Math.min(1, clickX / rect.width))
-
-  volume.value = newVolume
-
-  // 如果之前是静音状态，取消静音
-  if (isMuted.value && newVolume > 0) {
-    isMuted.value = false
-  }
-}
-
-// 进度条点击跳转
 const seekToPosition = (event: MouseEvent) => {
-  if (duration === 0) return
+  if (duration.value === 0) return
 
   const progressBar = event.currentTarget as HTMLElement
   const rect = progressBar.getBoundingClientRect()
   const clickX = event.clientX - rect.left
   const percentage = clickX / rect.width
-  const newTime = percentage * duration
+  const newTime = percentage * duration.value
 
-  emit('seek', newTime)
+  seek(newTime)
 }
 
-// 开始拖拽进度条
+const handleVolumeClick = (event: MouseEvent) => {
+  const slider = event.currentTarget as HTMLElement
+  const rect = slider.getBoundingClientRect()
+  const clickX = event.clientX - rect.left
+  const newVolume = Math.max(0, Math.min(1, clickX / rect.width))
+
+  setVolume(newVolume)
+}
+
 const startDragging = (event: MouseEvent) => {
   event.preventDefault()
-  isDragging.value = true
 
   const onMouseMove = (moveEvent: MouseEvent) => {
-    if (!isDragging.value) return
-
     const progressBar = document.querySelector('.progress-bar-container') as HTMLElement
+    if (!progressBar) return
+
     const rect = progressBar.getBoundingClientRect()
     const clickX = Math.max(0, Math.min(rect.width, moveEvent.clientX - rect.left))
     const percentage = clickX / rect.width
-    const newTime = percentage * duration
+    const newTime = percentage * duration.value
 
-    emit('seek', newTime)
+    seek(newTime)
   }
 
   const onMouseUp = () => {
-    isDragging.value = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
-    emit('seek', currentTime)
   }
 
   document.addEventListener('mousemove', onMouseMove)
@@ -182,17 +151,17 @@ const startDragging = (event: MouseEvent) => {
 <style scoped>
 .audio-player {
   padding: clamp(10px, 2vw, 14px);
-  background-color: var(--color-bg);
+  background-color: rgba(255, 255, 255, 0.05);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-radius: 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(4px);
 }
 
 .audio-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: clamp(10px, 2vw, 16px);
 }
 
 .play-pause-btn {
@@ -205,18 +174,18 @@ const startDragging = (event: MouseEvent) => {
   cursor: pointer;
   border: none;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: #2c5530;
   color: white;
   transition: all 0.2s ease;
 }
 
 .play-pause-btn:hover:not(:disabled) {
-  background: var(--color-primary);
+  background: #4a7c59;
   transform: scale(1.05);
 }
 
 .play-pause-btn:disabled {
-  background-color: var(--color-disabled, #ddd);
+  background-color: rgba(255, 255, 255, 0.2);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -224,16 +193,16 @@ const startDragging = (event: MouseEvent) => {
 .progress-section {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: clamp(4px, 1vw, 12px);
   flex: 1;
   min-width: 0;
 }
 
 .time {
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: clamp(12px, 1.8vw, 14px);
+  color: rgba(255, 255, 255, 0.7);
   font-variant-numeric: tabular-nums;
-  min-width: 40px;
+  min-width: 35px;
   text-align: center;
 }
 
@@ -250,14 +219,14 @@ const startDragging = (event: MouseEvent) => {
   position: relative;
   width: 100%;
   height: 4px;
-  background: var(--color-border);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
   overflow: visible;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--color-primary);
+  background: #2c5530;
   border-radius: 2px;
   transition: width 0.1s ease;
 }
@@ -268,7 +237,7 @@ const startDragging = (event: MouseEvent) => {
   transform: translate(-50%, -50%);
   width: 12px;
   height: 12px;
-  background: var(--color-primary);
+  background: #2c5530;
   border-radius: 50%;
   cursor: grab;
   opacity: 0;
@@ -296,7 +265,7 @@ const startDragging = (event: MouseEvent) => {
   justify-content: center;
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -304,12 +273,12 @@ const startDragging = (event: MouseEvent) => {
 }
 
 .volume-btn:hover {
-  color: var(--text-primary);
-  background: var(--hover);
+  color: #4a7c59;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .volume-slider-container {
-  width: 80px;
+  width: clamp(60px, 12vw, 80px);
 }
 
 .volume-slider {
@@ -323,19 +292,18 @@ const startDragging = (event: MouseEvent) => {
 .volume-slider-background {
   width: 100%;
   height: 4px;
-  background: var(--color-border);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
   position: relative;
 }
 
 .volume-slider-fill {
   height: 100%;
-  background: var(--color-primary);
+  background: #2c5530;
   border-radius: 2px;
   transition: width 0.1s ease;
 }
 
-/* 响应式设计 */
 @media (max-width: 640px) {
   .audio-controls {
     gap: 12px;
@@ -344,15 +312,6 @@ const startDragging = (event: MouseEvent) => {
   .play-pause-btn {
     width: 2rem;
     height: 2rem;
-  }
-
-  .progress-section {
-    gap: 4px;
-  }
-
-  .time {
-    font-size: 12px;
-    min-width: 35px;
   }
 
   .volume-control {

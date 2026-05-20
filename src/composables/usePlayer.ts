@@ -4,12 +4,10 @@ import { useOPFS } from './useOPFS'
 import { parseBilingualLRC } from '../utils/lrc-parser'
 import type { LRCLine } from '../types'
 
-/**
- * 音频播放器状态常量
- */
 export const PlayerState = {
   IDLE: 'idle',
   LOADING: 'loading',
+  BUFFERING: 'buffering',
   PLAYING: 'playing',
   PAUSED: 'paused',
   ENDED: 'ended',
@@ -18,27 +16,41 @@ export const PlayerState = {
 
 export type PlayerState = (typeof PlayerState)[keyof typeof PlayerState]
 
-/**
- * 播放器配置选项
- */
+export const DownloadStatus = {
+  IDLE: 'idle',
+  DOWNLOADING: 'downloading',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  RETRYING: 'retrying'
+} as const
+
+export type DownloadStatus = (typeof DownloadStatus)[keyof typeof DownloadStatus]
+
 export interface PlayerOptions {
   autoplay?: boolean
   loop?: boolean
   volume?: number
   playbackRate?: number
   basePath?: string
-
-  // 字幕循环播放设置
+  timeout?: number
+  maxRetries?: number
+  retryDelay?: number
   enableSentenceLoop?: boolean
   sentenceLoopCount?: number
   continueAfterLoop?: boolean
 }
 
-/**
- * 播放器返回类型
- */
+export interface DownloadProgress {
+  status: DownloadStatus
+  progress: number
+  downloadedBytes: number
+  totalBytes: number
+  fileName: string
+  error?: string
+  retryCount: number
+}
+
 export interface UsePlayerReturn {
-  // 基础状态
   state: Ref<PlayerState>
   currentTime: Ref<number>
   duration: Ref<number>
@@ -48,19 +60,17 @@ export interface UsePlayerReturn {
   volume: Ref<number>
   isMuted: Ref<boolean>
   playbackRate: Ref<number>
-
-  // 歌词相关
   lrcLines: Ref<LRCLine[]>
   currentLineIndex: Ref<number>
   currentLine: Ref<LRCLine | null>
-
-  // 计算属性
   progress: Ref<number>
   audioReady: Ref<boolean>
   formattedCurrentTime: Ref<string>
   formattedDuration: Ref<string>
-
-  // 控制方法
+  mp3DownloadProgress: Ref<DownloadProgress>
+  lrcDownloadProgress: Ref<DownloadProgress>
+  isOnline: Ref<boolean>
+  isSlowNetwork: Ref<boolean>
   play: (fromTime?: number) => void
   pause: () => void
   resume: () => void
@@ -70,65 +80,52 @@ export interface UsePlayerReturn {
   toggleMute: () => void
   setPlaybackRate: (rate: number) => void
   destroy: () => void
-
-  // 资源管理
   loadLesson: (name: string, version: string) => Promise<void>
-
-  // 课程切换
+  retryLoad: () => void
   nextLesson: () => void
   prevLesson: () => void
-
-  // 字幕播放
   playSentence: (lineIndex: number) => void
-
-  // 设置
   settings: {
     enableSentenceLoop: boolean
     sentenceLoopCount: number
     continueAfterLoop: boolean
   }
-
-  // 滚动引用
   lyricsContainerRef: Ref<HTMLElement | null>
 }
 
-/**
- * 专业音频播放器组合式函数
- * 集成音频播放、歌词同步、资源缓存、音量控制等功能
- */
-export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
+let playerInstance: UsePlayerReturn | null = null
+
+function createPlayer(options: PlayerOptions): UsePlayerReturn {
   const config = {
     autoplay: false,
     loop: false,
     volume: 0.7,
     playbackRate: 1.0,
     basePath: 'data',
+    timeout: 30000,
+    maxRetries: 3,
+    retryDelay: 2000,
     enableSentenceLoop: true,
     sentenceLoopCount: 3,
     continueAfterLoop: true,
     ...options
   }
 
-  // Web Audio API 相关
   const audioContext = shallowRef<AudioContext | null>(null)
   const gainNode = shallowRef<GainNode | null>(null)
   const sourceNode = shallowRef<AudioBufferSourceNode | null>(null)
   const audioBuffer = shallowRef<AudioBuffer | null>(null)
 
-  // 播放控制状态
   let startTime = 0
   let offset = 0
   let animationId: number | null = null
-
-  // 字幕循环状态
+  let abortController: AbortController | null = null
   let currentSentenceIndex = -1
   let sentenceLoopCount = 0
-
-  // 课程信息
   let currentLessonName = ''
   let currentVersion = ''
+  let pendingRetry: ReturnType<typeof setTimeout> | null = null
 
-  // 响应式状态
   const state = ref<PlayerState>(PlayerState.IDLE)
   const isPlaying = ref(false)
   const currentTime = ref(0)
@@ -142,19 +139,37 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   const lrcLines = ref<LRCLine[]>([])
   const currentLineIndex = ref(-1)
 
+  const isOnline = ref(navigator.onLine)
+  const isSlowNetwork = ref(false)
+
+  const mp3DownloadProgress = ref<DownloadProgress>({
+    status: DownloadStatus.IDLE,
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    fileName: '',
+    retryCount: 0
+  })
+
+  const lrcDownloadProgress = ref<DownloadProgress>({
+    status: DownloadStatus.IDLE,
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    fileName: '',
+    retryCount: 0
+  })
+
   const settings = reactive({
     enableSentenceLoop: config.enableSentenceLoop,
     sentenceLoopCount: config.sentenceLoopCount,
     continueAfterLoop: config.continueAfterLoop
   })
 
-  // 滚动容器引用
   const lyricsContainerRef = ref<HTMLElement | null>(null)
 
-  // 组合式函数
   const { cacheFile, readFile, fileExists } = useOPFS()
 
-  // 计算属性
   const currentLine = computed(() =>
     currentLineIndex.value >= 0 ? lrcLines.value[currentLineIndex.value] : null
   )
@@ -164,7 +179,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
   const formattedCurrentTime = computed(() => formatTime(currentTime.value))
   const formattedDuration = computed(() => formatTime(duration.value))
 
-  // 辅助函数
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
@@ -187,7 +201,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       try {
         sourceNode.value.stop()
       } catch {
-        // 忽略已停止的错误
       }
       sourceNode.value.disconnect()
       sourceNode.value = null
@@ -205,7 +218,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     const containerRect = container.getBoundingClientRect()
     const lineRect = activeLine.getBoundingClientRect()
 
-    // 计算滚动位置，使当前行居中显示
     const scrollTop = activeLine.offsetTop - container.offsetHeight / 2 + lineRect.height / 2
 
     container.scrollTo({
@@ -219,7 +231,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     if (idx !== currentLineIndex.value) {
       currentLineIndex.value = idx
 
-      // 自动滚动到当前字幕
       if (idx >= 0) {
         scrollToCurrentLine()
       }
@@ -233,10 +244,7 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     const elapsed = now - startTime + offset
     currentTime.value = Math.min(elapsed, duration.value)
 
-    // 更新歌词显示
     updateCurrentLine(currentTime.value)
-
-    // 检查是否到达当前句子末尾
     checkSentenceEnd()
 
     animationId = requestAnimationFrame(updateTime)
@@ -248,27 +256,21 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     const currentSentence = lrcLines.value[currentSentenceIndex]
     if (!currentSentence) return
 
-    // 获取下一句的时间（作为当前句的结束时间）
     const nextSentence = lrcLines.value[currentSentenceIndex + 1]
     const sentenceEndTime = nextSentence ? nextSentence.time : duration.value
 
-    // 检查是否到达句子末尾
     if (currentTime.value >= sentenceEndTime - 0.1) {
-      // 留一点余量
       sentenceLoopCount++
 
       if (sentenceLoopCount < settings.sentenceLoopCount) {
-        // 重新播放当前句子
         seek(currentSentence.time)
       } else {
-        // 循环完成，重置状态
         currentSentenceIndex = -1
         sentenceLoopCount = 0
 
         if (!settings.continueAfterLoop) {
           pause()
         }
-        // 如果 continueAfterLoop 为 true，继续播放下一句（自然继续）
       }
     }
   }
@@ -301,7 +303,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
 
     const ctx = getContext()
 
-    // 如果已经播放完成，重置到开头
     if (currentTime.value >= duration.value) {
       offset = 0
       currentTime.value = 0
@@ -310,8 +311,11 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       sentenceLoopCount = 0
     }
 
-    if (isPlaying.value) {
-      stopCurrentSource()
+    stopCurrentSource()
+
+    if (animationId) {
+      cancelAnimationFrame(animationId)
+      animationId = null
     }
 
     sourceNode.value = createSourceNode()
@@ -325,7 +329,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     state.value = PlayerState.PLAYING
     offset = startOffset
 
-    if (animationId) cancelAnimationFrame(animationId)
     animationId = requestAnimationFrame(updateTime)
   }
 
@@ -406,7 +409,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
 
     const line = lrcLines.value[lineIndex]
 
-    // 只有在启用句子循环时才设置循环状态
     if (settings.enableSentenceLoop) {
       currentSentenceIndex = lineIndex
       sentenceLoopCount = 0
@@ -415,26 +417,179 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       sentenceLoopCount = 0
     }
 
-    // 跳转到句子开始位置并播放
-    seek(line.time)
-
-    if (!isPlaying.value) {
-      play()
+    if (isPlaying.value) {
+      pause()
     }
 
-    // 确保滚动到当前句子
+    offset = line.time
+    currentTime.value = line.time
+
+    play(line.time)
+
     nextTick(() => {
       updateCurrentLine(line.time)
     })
   }
 
+  const fetchWithRetry = async <T>(
+    url: string,
+    options: RequestInit = {},
+    retries: number = config.maxRetries
+  ): Promise<Response> => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), config.timeout)
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      return response
+    } catch (err) {
+      clearTimeout(timeoutId)
+
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, config.retryDelay))
+        return fetchWithRetry(url, options, retries - 1)
+      }
+
+      throw err
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  const downloadAndCache = async (
+    url: string,
+    fileName: string,
+    progressRef: Ref<DownloadProgress>
+  ): Promise<ArrayBuffer> => {
+    const exists = await fileExists(fileName)
+    if (exists) {
+      progressRef.value = {
+        status: DownloadStatus.COMPLETED,
+        progress: 100,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        fileName,
+        retryCount: 0
+      }
+      return await readFile(fileName)
+    }
+
+    progressRef.value = {
+      status: DownloadStatus.DOWNLOADING,
+      progress: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      fileName,
+      retryCount: 0
+    }
+
+    let retries = config.maxRetries
+    let lastError: Error | null = null
+
+    while (retries >= 0) {
+      try {
+        const response = await fetchWithRetry(url, {}, retries)
+
+        const contentLength = response.headers.get('content-length')
+        const totalBytes = contentLength ? parseInt(contentLength, 10) : 0
+        progressRef.value.totalBytes = totalBytes
+
+        const reader = response.body?.getReader()
+        if (!reader) {
+          throw new Error('无法获取响应流')
+        }
+
+        const chunks: Uint8Array[] = []
+        let downloadedBytes = 0
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          chunks.push(value)
+          downloadedBytes += value.length
+
+          progressRef.value.downloadedBytes = downloadedBytes
+          progressRef.value.progress = totalBytes
+            ? Math.round((downloadedBytes / totalBytes) * 100)
+            : Math.min(99, (downloadedBytes / 1024 / 1024) * 10)
+        }
+
+        const totalBuffer = new Uint8Array(downloadedBytes)
+        let offset = 0
+        for (const chunk of chunks) {
+          totalBuffer.set(chunk, offset)
+          offset += chunk.length
+        }
+
+        const resultBuffer = totalBuffer.buffer.slice(0)
+        const cacheBuffer = totalBuffer.buffer.slice(0)
+        await cacheFile(fileName, cacheBuffer)
+
+        progressRef.value = {
+          status: DownloadStatus.COMPLETED,
+          progress: 100,
+          downloadedBytes,
+          totalBytes,
+          fileName,
+          retryCount: 0
+        }
+
+        return resultBuffer
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error('下载失败')
+        retries--
+
+        if (retries >= 0) {
+          progressRef.value = {
+            status: DownloadStatus.RETRYING,
+            progress: progressRef.value.progress,
+            downloadedBytes: progressRef.value.downloadedBytes,
+            totalBytes: progressRef.value.totalBytes,
+            fileName,
+            error: `重试中 (${config.maxRetries - retries}/${config.maxRetries})`,
+            retryCount: config.maxRetries - retries
+          }
+
+          await new Promise(resolve => setTimeout(resolve, config.retryDelay))
+        } else {
+          progressRef.value = {
+            status: DownloadStatus.FAILED,
+            progress: progressRef.value.progress,
+            downloadedBytes: progressRef.value.downloadedBytes,
+            totalBytes: progressRef.value.totalBytes,
+            fileName,
+            error: lastError.message,
+            retryCount: config.maxRetries + 1
+          }
+
+          throw lastError
+        }
+      }
+    }
+
+    throw lastError || new Error('下载失败')
+  }
+
   const loadLesson = async (name: string, version: string) => {
+    if (abortController) {
+      abortController.abort()
+    }
+    abortController = new AbortController()
+
     try {
       state.value = PlayerState.LOADING
       isLoading.value = true
       error.value = ''
 
-      // 更新当前课程信息
       currentLessonName = name
       currentVersion = version
 
@@ -449,34 +604,24 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
         lrc: `${basePath}/${name}.lrc`
       }
 
-      // 缓存资源
-      const existsMp3 = await fileExists(files.mp3)
-      const existsLrc = await fileExists(files.lrc)
+      const [mp3Buffer] = await Promise.all([
+        downloadAndCache(urls.mp3, files.mp3, mp3DownloadProgress),
+        downloadAndCache(urls.lrc, files.lrc, lrcDownloadProgress)
+      ])
 
-      if (!existsMp3) {
-        const response = await fetch(urls.mp3)
-        const buffer = await response.arrayBuffer()
-        await cacheFile(files.mp3, buffer)
-      }
-
-      if (!existsLrc) {
-        const response = await fetch(urls.lrc)
-        const buffer = await response.arrayBuffer()
-        await cacheFile(files.lrc, buffer)
-      }
-
-      // 解析歌词
       const lrcBuffer = await readFile(files.lrc)
       const lrcText = new TextDecoder('utf-8').decode(lrcBuffer)
       lrcLines.value = parseBilingualLRC(lrcText)
 
-      // 初始化音频
       const ctx = getContext()
       gainNode.value = ctx.createGain()
       gainNode.value.connect(ctx.destination)
       gainNode.value.gain.value = isMuted.value ? 0 : volume.value
 
-      const mp3Buffer = await readFile(files.mp3)
+      if (!(mp3Buffer instanceof ArrayBuffer)) {
+        throw new Error(`Invalid buffer type: ${typeof mp3Buffer}`)
+      }
+      
       audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
       duration.value = audioBuffer.value.duration
 
@@ -484,7 +629,6 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       state.value = PlayerState.IDLE
       isLoading.value = false
 
-      // 重置播放状态
       offset = 0
       currentTime.value = 0
       currentLineIndex.value = -1
@@ -497,12 +641,18 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
       isLoading.value = false
       error.value = err instanceof Error ? err.message : '未知错误'
       throw err
+    } finally {
+      abortController = null
+    }
+  }
+
+  const retryLoad = (): void => {
+    if (currentLessonName && currentVersion) {
+      loadLesson(currentLessonName, currentVersion)
     }
   }
 
   const nextLesson = (): void => {
-    // 这里需要根据实际的课程列表来实现
-    // 可以通过解析当前课程名称来推断下一课
     if (!currentLessonName) return
 
     const lessonMatch = currentLessonName.match(/(\d+)－/)
@@ -528,6 +678,20 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     }
   }
 
+  const checkNetworkStatus = (): void => {
+    isOnline.value = navigator.onLine
+
+    if ('connection' in navigator) {
+      const connection = (navigator as any).connection
+      const slowTypes = ['slow-2g', '2g', '3g']
+      isSlowNetwork.value = slowTypes.includes(connection.effectiveType)
+
+      connection.addEventListener('change', () => {
+        isSlowNetwork.value = slowTypes.includes(connection.effectiveType)
+      })
+    }
+  }
+
   const destroy = (): void => {
     if (isPlaying.value) pause()
     if (animationId) cancelAnimationFrame(animationId)
@@ -535,10 +699,27 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     if (audioContext.value) {
       audioContext.value.close()
     }
+    if (abortController) {
+      abortController.abort()
+    }
+    if (pendingRetry) {
+      clearTimeout(pendingRetry)
+    }
   }
 
+  checkNetworkStatus()
+
+  window.addEventListener('online', () => {
+    isOnline.value = true
+  })
+
+  window.addEventListener('offline', () => {
+    isOnline.value = false
+  })
+
   onUnmounted(() => {
-    destroy()
+    window.removeEventListener('online', () => {})
+    window.removeEventListener('offline', () => {})
   })
 
   return {
@@ -558,6 +739,10 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     audioReady,
     formattedCurrentTime,
     formattedDuration,
+    mp3DownloadProgress,
+    lrcDownloadProgress,
+    isOnline,
+    isSlowNetwork,
     play,
     pause,
     resume,
@@ -568,10 +753,18 @@ export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
     setPlaybackRate,
     destroy,
     loadLesson,
+    retryLoad,
     nextLesson,
     prevLesson,
     playSentence,
     settings,
     lyricsContainerRef
   }
+}
+
+export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
+  if (!playerInstance) {
+    playerInstance = createPlayer(options)
+  }
+  return playerInstance
 }

@@ -1,6 +1,14 @@
 <template>
   <div class="player-container" :class="{ 'is-loading': isLoading }">
-    <!-- 加载状态 -->
+    <!-- <div v-if="!isOnline" class="network-warning offline">
+      <span class="warning-icon">⚠️</span>
+      <span>您已离线，请检查网络连接</span>
+    </div>
+    <div v-else-if="isSlowNetwork" class="network-warning slow">
+      <span class="warning-icon">📶</span>
+      <span>当前网络较慢，可能影响加载速度</span>
+    </div> -->
+
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-content">
         <div class="loading-spinner">
@@ -11,10 +19,42 @@
           <h3>Loading Resources</h3>
           <p>Loading [{{ props.name }}]...</p>
         </div>
+
+        <div class="download-progress-container">
+          <div class="progress-item">
+            <div class="progress-header">
+              <span class="progress-label">Audio</span>
+              <span class="progress-percentage">{{ mp3DownloadProgress.progress }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                :class="mp3DownloadProgress.status.toLowerCase()"
+                :style="{ width: mp3DownloadProgress.progress + '%' }"
+              ></div>
+            </div>
+            <span v-if="mp3DownloadProgress.status === 'retrying'" class="retry-text">
+              {{ mp3DownloadProgress.error }}
+            </span>
+          </div>
+
+          <div class="progress-item">
+            <div class="progress-header">
+              <span class="progress-label">Lyrics</span>
+              <span class="progress-percentage">{{ lrcDownloadProgress.progress }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                :class="lrcDownloadProgress.status.toLowerCase()"
+                :style="{ width: lrcDownloadProgress.progress + '%' }"
+              ></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 错误提示 -->
     <div v-if="error" class="error-card">
       <div class="error-icon">⚠️</div>
       <div class="error-content">
@@ -24,92 +64,108 @@
       </div>
     </div>
 
-    <!-- 主内容区域 -->
     <div v-if="!isLoading && !error" class="player-content">
-      <!-- 设置区域 -->
-      <div class="settings-section">
-        <label class="setting-item">
-          <input type="checkbox" v-model="settings.enableSentenceLoop" />
-          <span>句子循环播放</span>
-        </label>
-        <label class="setting-item" v-if="settings.enableSentenceLoop">
-          <span>循环次数:</span>
-          <select v-model="settings.sentenceLoopCount">
-            <option :value="1">1次</option>
-            <option :value="2">2次</option>
-            <option :value="3">3次</option>
-            <option :value="5">5次</option>
-          </select>
-        </label>
-        <label class="setting-item" v-if="settings.enableSentenceLoop">
-          <input type="checkbox" v-model="settings.continueAfterLoop" />
-          <span>循环后继续播放</span>
-        </label>
-      </div>
-
-      <!-- 歌词显示区域 -->
-      <section class="lyrics-section" ref="lyricsContainerRef">
-        <Lyrics
-          :lrc-lines="lrcLines"
-          :current-line-index="currentLineIndex"
-          @line-click="handleLineClick"
-        />
-      </section>
-
-      <!-- 音频控制区域 -->
-      <section class="audio-section">
-        <AudioPlayer
-          :is-playing="isPlaying"
-          :current-time="currentTime"
-          :duration="duration"
-          :formatted-current-time="formattedCurrentTime"
-          :formatted-duration="formattedDuration"
-          :progress="progress"
-          @seek="seek"
-          @play="togglePlay"
-        />
-      </section>
-
-      <div class="btn-container">
-        <button @click="prevLesson" class="btn btn-secondary" title="上一课">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
+      <div class="top-bar">
+        <button class="nav-btn" @click="prevLesson" title="上一课">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
-        <button @click="nextLesson" class="btn btn-secondary" title="下一课">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
+        <div class="lesson-info">
+          <span class="lesson-badge">{{ props.version }}</span>
+          <span class="lesson-title">{{ props.name }}</span>
+        </div>
+        <button class="nav-btn" @click="nextLesson" title="下一课">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </button>
+      </div>
+
+      <div class="player-layout">
+        <div class="layout-sidebar">
+          <div class="album-panel" @click="handleCoverClick">
+            <div class="album-cover">
+              <div class="cover-inner">
+                <svg viewBox="0 0 100 100" class="music-icon">
+                  <circle cx="50" cy="50" r="45" fill="url(#playerGradient)" />
+                  <path d="M35 35 L35 65 M45 35 L45 60 M55 35 L55 70 M65 35 L65 55" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" />
+                  <defs>
+                    <radialGradient id="playerGradient" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" style="stop-color: #2c5530" />
+                      <stop offset="100%" style="stop-color: #1a361e" />
+                    </radialGradient>
+                  </defs>
+                </svg>
+                <div class="play-overlay" :class="{ visible: !isPlaying }">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="album-meta">
+              <span class="album-version">{{ props.version }}</span>
+            </div>
+          </div>
+
+          <div class="settings-panel">
+            <h3 class="panel-title">播放设置</h3>
+            <div class="settings-grid">
+              <label class="setting-row">
+                <input type="checkbox" v-model="settings.enableSentenceLoop" />
+                <span>句子循环播放</span>
+              </label>
+              <div v-if="settings.enableSentenceLoop" class="setting-row">
+                <span>循环次数:</span>
+                <select v-model="settings.sentenceLoopCount">
+                  <option :value="1">1次</option>
+                  <option :value="2">2次</option>
+                  <option :value="3">3次</option>
+                  <option :value="5">5次</option>
+                </select>
+              </div>
+              <label v-if="settings.enableSentenceLoop" class="setting-row">
+                <input type="checkbox" v-model="settings.continueAfterLoop" />
+                <span>循环后继续播放</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="layout-main">
+          <div class="current-lyric-panel" @click="handleLyricPanelClick">
+            <div class="current-lyric-text">{{ currentLineText }}</div>
+            <div v-if="currentLineTranslation" class="current-lyric-translation">{{ currentLineTranslation }}</div>
+            <div v-if="!isPlaying" class="tap-hint">点击此处开始播放</div>
+          </div>
+
+          <div class="lyrics-scroll" ref="lyricsContainerRef">
+            <div
+              v-for="(line, index) in lrcLines"
+              :key="index"
+              class="lyric-line"
+              :class="{ active: index === currentLineIndex }"
+              @click="handleLineClick(index)"
+            >
+              <span class="lyric-en">{{ line.textEn }}</span>
+              <span v-if="line.textZh" class="lyric-zh">{{ line.textZh }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <AudioPlayer />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, watch } from 'vue'
 import { usePlayer } from 'Composables/usePlayer'
 import AudioPlayer from './AudioPlayer.vue'
-import Lyrics from './Lyrics.vue'
 
 interface Props {
   name?: string
@@ -138,72 +194,106 @@ const {
   loadLesson,
   nextLesson,
   prevLesson,
-  playSentence
+  playSentence,
+  retryLoad,
+  mp3DownloadProgress,
+  lrcDownloadProgress,
+  isOnline,
+  isSlowNetwork,
+  lyricsContainerRef
 } = usePlayer({
   autoplay: false,
   loop: true,
   volume: 0.7,
   basePath: 'data',
+  timeout: 30000,
+  maxRetries: 3,
+  retryDelay: 2000,
   enableSentenceLoop: true,
   sentenceLoopCount: 3,
   continueAfterLoop: true
 })
 
+const currentLineText = computed(() => {
+  if (currentLineIndex.value >= 0 && currentLineIndex.value < lrcLines.value.length) {
+    return lrcLines.value[currentLineIndex.value].textEn
+  }
+  return isPlaying.value ? '' : '点击播放开始学习'
+})
+
+const currentLineTranslation = computed(() => {
+  if (currentLineIndex.value >= 0 && currentLineIndex.value < lrcLines.value.length) {
+    return lrcLines.value[currentLineIndex.value].textZh || ''
+  }
+  return ''
+})
+
 const handleLineClick = (index: number) => {
-  // 使用 playSentence 实现点击字幕播放，支持循环
   playSentence(index)
 }
 
-const retryLoad = () => {
-  if (props.name && props.version) {
-    loadLesson(props.name, props.version)
+const handleLyricPanelClick = () => {
+  if (!isPlaying.value) {
+    togglePlay()
   }
 }
 
-// 加载课程
-if (props.name && props.version) {
-  loadLesson(props.name, props.version)
+const handleCoverClick = () => {
+  togglePlay()
 }
+
+watch(
+  () => props.name,
+  newName => {
+    if (newName) {
+      loadLesson(newName, props.version)
+    }
+  }
+)
 </script>
 
 <style>
 :root {
-  --primary-color: #2c5530;
-  --primary-light: #4a7c59;
-  --accent-color: #d4af37;
-  --text-primary: #2d3748;
-  --text-secondary: #718096;
-  --text-light: #a0aec0;
-  --bg-primary: #fefefe;
-  --bg-secondary: #f7fafc;
-  --bg-tertiary: #edf2f7;
-  --border-color: #e2e8f0;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-  --border-radius: 12px;
-  --border-radius-sm: 8px;
-  --spacing-xs: 0.5rem;
-  --spacing-sm: 1rem;
-  --spacing-md: 1.5rem;
-  --spacing-lg: 2rem;
-  --spacing-xl: 3rem;
+  --player-primary: #2c5530;
+  --player-primary-light: #4a7c59;
+  --player-accent: #d4af37;
+  --player-text: #f5f5f5;
+  --player-text-secondary: rgba(255, 255, 255, 0.7);
+  --player-bg: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  --player-surface: rgba(255, 255, 255, 0.05);
+  --player-surface-hover: rgba(255, 255, 255, 0.1);
+  --player-border: rgba(255, 255, 255, 0.1);
 }
 
 .player-container {
-  &.is-loading {
-    pointer-events: none;
-  }
+  container-type: inline-size;
+  container-name: player;
+  min-height: 100vh;
+  background: var(--player-bg);
+  color: var(--player-text);
+  box-sizing: border-box;
 }
 
+/* ===== 网络状态 ===== */
+.network-warning {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 1vw, 10px);
+  padding: clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 16px);
+  font-size: clamp(0.75rem, 1.5vw, 0.875rem);
+
+  &.offline { background: #dc2626; color: white; }
+  &.slow { background: #d97706; color: white; }
+}
+
+/* ===== 加载状态 ===== */
 .loading-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,213 +302,449 @@ if (props.name && props.version) {
 
 .loading-content {
   text-align: center;
-  max-width: 400px;
-  padding: var(--spacing-xl);
+  padding: clamp(20px, 4vw, 40px);
 }
 
 .loading-spinner {
   position: relative;
-  width: 60px;
-  height: 60px;
-  margin: 0 auto var(--spacing-md);
+  width: clamp(40px, 8vw, 60px);
+  height: clamp(40px, 8vw, 60px);
+  margin: 0 auto clamp(16px, 2vw, 24px);
 }
 
 .spinner-ring {
-  width: 100%;
-  height: 100%;
-  border: 3px solid var(--border-color);
-  border-top: 3px solid var(--primary-color);
+  width: 100%; height: 100%;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top: 3px solid var(--player-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
 .spinner-dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  background: var(--accent-color);
+  position: absolute; top: 50%; left: 50%;
+  width: clamp(6px, 1vw, 8px); height: clamp(6px, 1vw, 8px);
+  background: var(--player-accent);
   border-radius: 50%;
   transform: translate(-50%, -50%);
 }
 
-.loading-text {
-  h3 {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: var(--spacing-sm);
-  }
-
-  p {
-    color: var(--text-secondary);
-    line-height: 1.6;
-  }
+.loading-text h3 {
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  font-weight: 600;
+  margin-bottom: clamp(4px, 0.5vw, 8px);
 }
 
-.error-card {
-  background: #fed7d7;
-  border: 1px solid #feb2b2;
-  border-radius: var(--border-radius);
-  padding: var(--spacing-md);
-  margin: var(--spacing-lg);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+.loading-text p {
+  color: var(--player-text-secondary);
 }
 
-.error-icon {
-  font-size: 1.5rem;
-  flex-shrink: 0;
+.download-progress-container {
+  margin-top: clamp(20px, 3vw, 32px);
+  padding: clamp(12px, 1.5vw, 16px);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
 }
 
-.error-content {
-  flex: 1;
-
-  h4 {
-    font-weight: 600;
-    color: #c53030;
-    margin-bottom: var(--spacing-xs);
-  }
-
-  p {
-    color: #742a2a;
-    margin-bottom: var(--spacing-sm);
-  }
+.progress-item:not(:last-child) {
+  margin-bottom: clamp(12px, 1.5vw, 16px);
 }
 
-.retry-btn {
-  background: #c53030;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #9b2c2c;
-    transform: translateY(-1px);
-  }
-}
-
-.player-content {
-  max-width: 800px;
-  margin: auto;
-}
-
-.player-header {
+.progress-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--spacing-xl);
-  padding-bottom: var(--spacing-md);
-  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 8px;
+}
+
+.progress-label {
+  font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+  color: var(--player-text-secondary);
+}
+
+.progress-percentage {
+  font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+  color: var(--player-primary-light);
+  font-weight: 600;
+}
+
+.progress-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  border-radius: 3px;
+
+  &.downloading { background: linear-gradient(90deg, var(--player-primary), var(--player-primary-light)); }
+  &.retrying { background: linear-gradient(90deg, #d97706, #f59e0b); animation: pulse 1s ease-in-out infinite; }
+  &.completed { background: #22c55e; }
+  &.failed { background: #ef4444; }
+}
+
+.retry-text {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #d97706;
+}
+
+/* ===== 错误卡片 ===== */
+.error-card {
+  margin: clamp(12px, 2vw, 16px);
+  padding: clamp(12px, 2vw, 16px);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-icon { font-size: 1.5rem; }
+.error-content h4 { font-weight: 600; color: #ef4444; margin-bottom: 4px; }
+.error-content p { color: rgba(239, 68, 68, 0.8); margin-bottom: 12px; }
+
+.retry-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* ===== 主内容区域 ===== */
+.player-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ===== 顶部工具栏 ===== */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(8px, 1.5vw, 12px) clamp(12px, 3vw, 24px);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.nav-btn {
+  width: clamp(36px, 6vw, 40px);
+  height: clamp(36px, 6vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border: none;
+  color: var(--player-text);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover { background: rgba(255, 255, 255, 0.2); }
+  &:active { transform: scale(0.95); }
 }
 
 .lesson-info {
-  .lesson-badge {
-    display: inline-block;
-    background: var(--primary-color);
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .lesson-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin: 0;
-    line-height: 1.2;
-  }
-}
-
-.header-actions {
   display: flex;
-  gap: var(--spacing-xs);
-
-  .action-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    padding: 0.5rem;
-    cursor: pointer;
-    color: var(--text-secondary);
-    transition: all 0.2s;
-
-    &:hover {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-      border-color: var(--primary-color);
-    }
-  }
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1px, 0.3vw, 2px);
+  min-width: 0;
+  padding: 0 clamp(8px, 2vw, 16px);
 }
 
-.settings-section {
+.lesson-badge {
+  font-size: clamp(0.65rem, 1.2vw, 0.75rem);
+  padding: 2px 8px;
+  background: var(--player-primary);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.lesson-title {
+  font-size: clamp(0.8rem, 1.5vw, 0.9rem);
+  font-weight: 600;
+  max-width: clamp(160px, 40vw, 300px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== 播放器布局 ===== */
+.player-layout {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius);
-  margin-bottom: var(--spacing-lg);
+  flex-direction: column;
+  gap: clamp(12px, 2vw, 20px);
+  padding: clamp(12px, 2vw, 20px);
+}
 
-  .setting-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    color: var(--text-secondary);
-    font-size: 0.875rem;
+.layout-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vw, 20px);
+}
 
-    select {
-      border: 1px solid var(--border-color);
-      border-radius: var(--border-radius-sm);
-      padding: 0.25rem 0.5rem;
-      background: white;
-      color: var(--text-primary);
-    }
+.album-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1.5vw, 16px);
+  cursor: pointer;
+  background: var(--player-surface);
+  border-radius: clamp(12px, 2vw, 16px);
+  padding: clamp(16px, 3vw, 24px);
+  transition: transform 0.2s;
 
-    input[type='checkbox'] {
-      cursor: pointer;
-    }
+  &:hover { transform: scale(1.02); }
+  &:active { transform: scale(0.98); }
+}
+
+.album-cover {
+  width: clamp(160px, 35vw, 220px);
+  aspect-ratio: 1;
+}
+
+.cover-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 clamp(10px, 3vw, 20px) clamp(30px, 8vw, 60px) rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.music-icon {
+  width: clamp(120px, 25vw, 180px);
+  height: clamp(120px, 25vw, 180px);
+}
+
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+
+  &.visible { opacity: 1; }
+}
+
+.cover-inner:hover .play-overlay {
+  opacity: 1;
+}
+
+.album-meta {
+  text-align: center;
+}
+
+.album-version {
+  display: inline-block;
+  font-size: clamp(0.7rem, 1.2vw, 0.8rem);
+  padding: clamp(3px, 0.5vw, 4px) clamp(8px, 1.5vw, 12px);
+  background: var(--player-primary);
+  border-radius: 12px;
+}
+
+/* ===== 设置面板 ===== */
+.settings-panel {
+  background: var(--player-surface);
+  border-radius: clamp(12px, 2vw, 16px);
+  padding: clamp(14px, 2.5vw, 20px);
+}
+
+.panel-title {
+  font-size: clamp(0.85rem, 1.5vw, 1rem);
+  font-weight: 600;
+  margin-bottom: clamp(10px, 1.5vw, 16px);
+  padding-bottom: clamp(8px, 1vw, 12px);
+  border-bottom: 1px solid var(--player-border);
+}
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.2vw, 12px);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.2vw, 12px);
+  font-size: clamp(0.8rem, 1.3vw, 0.9rem);
+  color: var(--player-text-secondary);
+  cursor: pointer;
+}
+
+.setting-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.setting-row select {
+  padding: clamp(4px, 0.6vw, 6px) clamp(8px, 1.2vw, 12px);
+  border: 1px solid var(--player-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--player-text);
+  font-size: clamp(0.8rem, 1.3vw, 0.9rem);
+  cursor: pointer;
+}
+
+/* ===== 主区域 ===== */
+.layout-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vw, 20px);
+  min-height: 0;
+}
+
+.current-lyric-panel {
+  background: var(--player-surface);
+  border-radius: clamp(12px, 2vw, 16px);
+  padding: clamp(20px, 4vw, 32px);
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+
+  &:hover { background: var(--player-surface-hover); }
+}
+
+.current-lyric-text {
+  font-size: clamp(1.25rem, 3.5vw, 2rem);
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: clamp(4px, 0.8vw, 8px);
+}
+
+.current-lyric-translation {
+  font-size: clamp(1rem, 2.2vw, 1.25rem);
+  color: var(--player-text-secondary);
+  font-style: italic;
+}
+
+.tap-hint {
+  margin-top: clamp(8px, 1.5vw, 12px);
+  font-size: clamp(0.8rem, 1.5vw, 0.9rem);
+  color: var(--player-accent);
+  animation: hint-pulse 2s ease-in-out infinite;
+}
+
+/* ===== 歌词滚动 ===== */
+.lyrics-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  /* padding: 0 clamp(8px, 1.5vw, 12px); */
+}
+
+.lyric-line {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 0.3vw, 4px);
+  padding: clamp(10px, 1.8vw, 14px) clamp(12px, 2vw, 16px);
+  border-radius: clamp(6px, 1vw, 8px);
+  margin-bottom: clamp(4px, 0.5vw, 8px);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--player-surface);
+
+  &:hover { background: var(--player-surface-hover); }
+
+  &.active {
+    background: rgba(44, 85, 48, 0.3);
+    border-left: 3px solid var(--player-accent);
+    padding-left: calc(clamp(12px, 2vw, 16px) - 3px);
   }
 }
 
-.lyrics-section {
-  margin-bottom: var(--spacing-md);
+.lyric-en {
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-.audio-section {
+.lyric-zh {
+  font-size: clamp(0.8rem, 1.6vw, 0.9rem);
+  color: var(--player-text-secondary);
+  line-height: 1.4;
+}
+
+/* ===== 底部控制栏 ===== */
+.bottom-bar {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+  padding: clamp(10px, 2vw, 16px);
+  border-top: 1px solid var(--player-border);
   position: sticky;
-  bottom: 1%;
-  animation: fadeOutUp linear;
-  animation-timeline: scroll();
-  animation-range: entry;
+  bottom: 0;
 }
 
-.btn-container {
-  margin: 1.5rem 0;
-  display: flex;
-  justify-content: space-between;
+/* ===== 容器查询 - 响应式布局 ===== */
+@container player (min-width: 600px) {
+  .player-layout {
+    display: grid;
+    grid-template-columns: clamp(220px, 30%, 280px) 1fr;
+    grid-template-rows: 1fr auto;
+    gap: clamp(16px, 2.5vw, 24px);
+  }
+
+  .layout-sidebar {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .layout-main {
+    grid-row: 1;
+    grid-column: 2;
+  }
 }
 
+@container player (min-width: 800px) {
+  .player-layout {
+    grid-template-columns: clamp(240px, 25%, 300px) 1fr;
+  }
+}
+
+@container player (min-width: 1000px) {
+  .player-layout {
+    grid-template-columns: clamp(260px, 22%, 320px) 1fr;
+  }
+}
+
+/* ===== 动画 ===== */
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes hint-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 </style>

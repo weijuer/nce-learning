@@ -3,38 +3,53 @@ import FileWorker from '../workers/file-worker?worker'
 
 export function useOPFS() {
   const worker = ref<Worker | null>(null)
-  // 保存回调 resolver 的 map，用于处理多次请求
   const pending = new Map<string, (value: any) => void>()
+  let requestId = 0
+
+  function generateId(): string {
+    return `req_${++requestId}_${Date.now()}`
+  }
 
   function getWorker(): Worker {
     if (!worker.value) {
       worker.value = new FileWorker()
       worker.value.onmessage = (e: MessageEvent) => {
         const { type, payload } = e.data
+        const requestId = payload.requestId
         if (type === 'cache_complete' || type === 'delete_complete') {
-          const resolve = pending.get(payload.path)
+          const resolve = pending.get(requestId)
           if (resolve) {
             resolve(true)
-            pending.delete(payload.path)
+            pending.delete(requestId)
           }
         }
         else if (type === 'file_data') {
-          const resolve = pending.get(payload.path)
+          const resolve = pending.get(requestId)
           if (resolve) {
-            resolve(payload.buffer)
-            pending.delete(payload.path)
+            const buffer = payload.buffer
+            if (buffer instanceof ArrayBuffer) {
+              resolve(buffer)
+            } else if (buffer instanceof Uint8Array) {
+              const ab = new ArrayBuffer(buffer.length)
+              const view = new Uint8Array(ab)
+              view.set(buffer)
+              resolve(ab)
+            } else {
+              console.error('Unexpected buffer type:', buffer)
+              resolve(buffer)
+            }
+            pending.delete(requestId)
           }
         }
         else if (type === 'exists_result') {
-          const resolve = pending.get(payload.path)
+          const resolve = pending.get(requestId)
           if (resolve) {
             resolve(payload.exists)
-            pending.delete(payload.path)
+            pending.delete(requestId)
           }
         }
         else if (type === 'error') {
-          // 转发所有挂起请求的错误，简单处理
-          for (const [, reject] of pending) {
+          for (const [id, reject] of pending) {
             reject(new Error(payload.message))
           }
           pending.clear()
@@ -47,18 +62,19 @@ export function useOPFS() {
   function sendRequest(type: string, payload: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const w = getWorker()
-      const path = payload.path
-      pending.set(path, resolve)
-      // 简单错误处理，如果 worker 报错会触发 error 事件
+      const id = generateId()
+      pending.set(id, resolve)
+      const requestPayload = { ...payload, requestId: id }
+      
       w.onerror = (err) => {
         reject(err)
-        pending.delete(path)
+        pending.delete(id)
       }
+      
       if (type === 'cache_file') {
-        // 传递 ArrayBuffer 需要可转移对象
-        w.postMessage({ type, payload }, [payload.data])
+        w.postMessage({ type, payload: requestPayload }, [requestPayload.data])
       } else {
-        w.postMessage({ type, payload })
+        w.postMessage({ type, payload: requestPayload })
       }
     })
   }

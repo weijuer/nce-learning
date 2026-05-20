@@ -178,3 +178,14 @@
     pointer-events: none;
   }
 }
+
+@keyframes slideUp {
+  from {
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  to {
+    transform: translateY(10vh);
+    pointer-events: none;
+  }
+}
