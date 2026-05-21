@@ -200,8 +200,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     if (sourceNode.value) {
       try {
         sourceNode.value.stop()
-      } catch {
-      }
+      } catch {}
       sourceNode.value.disconnect()
       sourceNode.value = null
     }
@@ -215,7 +214,6 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     const activeLine = container.querySelector('.lyric-line.active') as HTMLElement
     if (!activeLine) return
 
-    const containerRect = container.getBoundingClientRect()
     const lineRect = activeLine.getBoundingClientRect()
 
     const scrollTop = activeLine.offsetTop - container.offsetHeight / 2 + lineRect.height / 2
@@ -621,7 +619,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
       if (!(mp3Buffer instanceof ArrayBuffer)) {
         throw new Error(`Invalid buffer type: ${typeof mp3Buffer}`)
       }
-      
+
       audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
       duration.value = audioBuffer.value.duration
 

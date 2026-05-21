@@ -42,4 +42,15 @@ const router = createRouter({
   routes
 })
 
+// 在路由守卫中启用视图过渡
+router.beforeEach((to, from, next) => {
+  if (document.startViewTransition) {
+    document.startViewTransition(() => {
+      next()
+    })
+  } else {
+    next()
+  }
+})
+
 export default router

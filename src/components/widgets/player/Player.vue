@@ -67,7 +67,17 @@
     <div v-if="!isLoading && !error" class="player-content">
       <div class="top-bar">
         <button class="nav-btn" @click="prevLesson" title="上一课">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
@@ -76,7 +86,17 @@
           <span class="lesson-title">{{ props.name }}</span>
         </div>
         <button class="nav-btn" @click="nextLesson" title="下一课">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </button>
@@ -89,7 +109,13 @@
               <div class="cover-inner">
                 <svg viewBox="0 0 100 100" class="music-icon">
                   <circle cx="50" cy="50" r="45" fill="url(#playerGradient)" />
-                  <path d="M35 35 L35 65 M45 35 L45 60 M55 35 L55 70 M65 35 L65 55" stroke="white" stroke-width="3" stroke-linecap="round" fill="none" />
+                  <path
+                    d="M35 35 L35 65 M45 35 L45 60 M55 35 L55 70 M65 35 L65 55"
+                    stroke="white"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    fill="none"
+                  />
                   <defs>
                     <radialGradient id="playerGradient" cx="50%" cy="50%" r="50%">
                       <stop offset="0%" style="stop-color: #2c5530" />
@@ -136,7 +162,9 @@
         <div class="layout-main">
           <div class="current-lyric-panel" @click="handleLyricPanelClick">
             <div class="current-lyric-text">{{ currentLineText }}</div>
-            <div v-if="currentLineTranslation" class="current-lyric-translation">{{ currentLineTranslation }}</div>
+            <div v-if="currentLineTranslation" class="current-lyric-translation">
+              {{ currentLineTranslation }}
+            </div>
             <div v-if="!isPlaying" class="tap-hint">点击此处开始播放</div>
           </div>
 
@@ -180,27 +208,18 @@ const props = withDefaults(defineProps<Props>(), {
 const {
   isPlaying,
   isLoading,
-  currentTime,
-  duration,
   lrcLines,
   currentLineIndex,
   error,
-  progress,
-  formattedCurrentTime,
-  formattedDuration,
   settings,
   togglePlay,
-  seek,
   loadLesson,
   nextLesson,
   prevLesson,
   playSentence,
   retryLoad,
   mp3DownloadProgress,
-  lrcDownloadProgress,
-  isOnline,
-  isSlowNetwork,
-  lyricsContainerRef
+  lrcDownloadProgress
 } = usePlayer({
   autoplay: false,
   loop: true,
@@ -285,8 +304,14 @@ watch(
   padding: clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 16px);
   font-size: clamp(0.75rem, 1.5vw, 0.875rem);
 
-  &.offline { background: #dc2626; color: white; }
-  &.slow { background: #d97706; color: white; }
+  &.offline {
+    background: #dc2626;
+    color: white;
+  }
+  &.slow {
+    background: #d97706;
+    color: white;
+  }
 }
 
 /* ===== 加载状态 ===== */
@@ -313,7 +338,8 @@ watch(
 }
 
 .spinner-ring {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   border: 3px solid rgba(255, 255, 255, 0.1);
   border-top: 3px solid var(--player-accent);
   border-radius: 50%;
@@ -321,8 +347,11 @@ watch(
 }
 
 .spinner-dot {
-  position: absolute; top: 50%; left: 50%;
-  width: clamp(6px, 1vw, 8px); height: clamp(6px, 1vw, 8px);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(6px, 1vw, 8px);
+  height: clamp(6px, 1vw, 8px);
   background: var(--player-accent);
   border-radius: 50%;
   transform: translate(-50%, -50%);
@@ -375,13 +404,24 @@ watch(
 
 .progress-fill {
   height: 100%;
-  transition: width 0.3s ease, background-color 0.3s ease;
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
   border-radius: 3px;
 
-  &.downloading { background: linear-gradient(90deg, var(--player-primary), var(--player-primary-light)); }
-  &.retrying { background: linear-gradient(90deg, #d97706, #f59e0b); animation: pulse 1s ease-in-out infinite; }
-  &.completed { background: #22c55e; }
-  &.failed { background: #ef4444; }
+  &.downloading {
+    background: linear-gradient(90deg, var(--player-primary), var(--player-primary-light));
+  }
+  &.retrying {
+    background: linear-gradient(90deg, #d97706, #f59e0b);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  &.completed {
+    background: #22c55e;
+  }
+  &.failed {
+    background: #ef4444;
+  }
 }
 
 .retry-text {
@@ -403,9 +443,18 @@ watch(
   gap: 12px;
 }
 
-.error-icon { font-size: 1.5rem; }
-.error-content h4 { font-weight: 600; color: #ef4444; margin-bottom: 4px; }
-.error-content p { color: rgba(239, 68, 68, 0.8); margin-bottom: 12px; }
+.error-icon {
+  font-size: 1.5rem;
+}
+.error-content h4 {
+  font-weight: 600;
+  color: #ef4444;
+  margin-bottom: 4px;
+}
+.error-content p {
+  color: rgba(239, 68, 68, 0.8);
+  margin-bottom: 12px;
+}
 
 .retry-btn {
   background: #ef4444;
@@ -452,8 +501,12 @@ watch(
   transition: all 0.2s;
   flex-shrink: 0;
 
-  &:hover { background: rgba(255, 255, 255, 0.2); }
-  &:active { transform: scale(0.95); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  &:active {
+    transform: scale(0.95);
+  }
 }
 
 .lesson-info {
@@ -508,8 +561,12 @@ watch(
   padding: clamp(16px, 3vw, 24px);
   transition: transform 0.2s;
 
-  &:hover { transform: scale(1.02); }
-  &:active { transform: scale(0.98); }
+  &:hover {
+    transform: scale(1.02);
+  }
+  &:active {
+    transform: scale(0.98);
+  }
 }
 
 .album-cover {
@@ -544,7 +601,9 @@ watch(
   opacity: 0;
   transition: opacity 0.3s;
 
-  &.visible { opacity: 1; }
+  &.visible {
+    opacity: 1;
+  }
 }
 
 .cover-inner:hover .play-overlay {
@@ -627,7 +686,9 @@ watch(
   transition: background 0.2s;
   flex-shrink: 0;
 
-  &:hover { background: var(--player-surface-hover); }
+  &:hover {
+    background: var(--player-surface-hover);
+  }
 }
 
 .current-lyric-text {
@@ -669,7 +730,9 @@ watch(
   transition: all 0.2s;
   background: var(--player-surface);
 
-  &:hover { background: var(--player-surface-hover); }
+  &:hover {
+    background: var(--player-surface-hover);
+  }
 
   &.active {
     background: rgba(44, 85, 48, 0.3);
@@ -734,17 +797,31 @@ watch(
 
 /* ===== 动画 ===== */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 @keyframes hint-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 </style>

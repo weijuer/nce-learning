@@ -10,11 +10,38 @@ onMounted(() => {
     root.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches
 })
 
-const toggleTheme = () => {
+const toggleTheme = (e: MouseEvent | TouchEvent) => {
   isDark.value = !isDark.value
+
   const root = document.documentElement
-  root.classList.toggle('dark', isDark.value)
-  root.classList.toggle('light', !isDark.value)
+  const viewTransition = document.startViewTransition?.(() => {
+    root.classList.toggle('dark', isDark.value)
+    root.classList.toggle('light', !isDark.value)
+  })
+
+  viewTransition.ready.then(() => {
+    const { clientX, clientY } = e instanceof MouseEvent ? e : e.touches[0]
+
+    const radius = Math.hypot(
+      Math.max(clientX, window.innerWidth - clientX),
+      Math.max(clientY, window.innerHeight - clientY)
+    )
+
+    const clipPath = [
+      `circle(0% at ${clientX}px ${clientY}px)`,
+      `circle(${radius}px at ${clientX}px ${clientY}px)`
+    ]
+
+    document.documentElement.animate(
+      {
+        clipPath: isDark.value ? clipPath.reverse() : clipPath
+      },
+      {
+        duration: 500,
+        pseudoElement: isDark.value ? '::view-transition-old(root)' : '::view-transition-new(root)'
+      }
+    )
+  })
 }
 </script>
 
@@ -60,7 +87,11 @@ const toggleTheme = () => {
 
       <!-- Main content -->
       <article class="holy-grail__middle container">
-        <router-view></router-view>
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
         <back-to-top></back-to-top>
       </article>
 
@@ -107,7 +138,7 @@ const toggleTheme = () => {
   }
   to {
     opacity: 0;
-    transform: translateY(-100%);
+    transform: translateY(-10px);
   }
 }
 
@@ -135,16 +166,13 @@ const toggleTheme = () => {
   }
 }
 
-::view-transition-old(root) {
-  animation:
-    90ms cubic-bezier(0.4, 0, 1, 1) both fade-out,
-    300ms cubic-bezier(0.4, 0, 0.2, 1) both slide-to-left;
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
 }
 
-::view-transition-new(root) {
-  animation:
-    210ms cubic-bezier(0, 0, 0.2, 1) 90ms both fade-in,
-    300ms cubic-bezier(0.4, 0, 0.2, 1) both slide-from-right;
+.dark::view-transition-old(root) {
+  z-index: 1;
 }
 </style>
 

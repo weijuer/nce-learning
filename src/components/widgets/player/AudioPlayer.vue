@@ -77,7 +77,6 @@ const {
   duration,
   volume,
   isMuted,
-  progress,
   formattedCurrentTime,
   formattedDuration,
   togglePlay,

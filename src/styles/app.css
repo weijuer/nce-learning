@@ -37,10 +37,12 @@
 
   &.dark {
     color-scheme: dark;
+    background-color: var(--color-bg);
   }
 
   &.light {
     color-scheme: light;
+    background-color: var(--color-bg);
   }
 
   &::-webkit-scrollbar {
