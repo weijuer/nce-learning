@@ -49,7 +49,7 @@ export function useOPFS() {
           }
         }
         else if (type === 'error') {
-          for (const [id, reject] of pending) {
+          for (const [, reject] of pending) {
             reject(new Error(payload.message))
           }
           pending.clear()

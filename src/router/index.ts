@@ -43,7 +43,7 @@ const router = createRouter({
 })
 
 // 在路由守卫中启用视图过渡
-router.beforeEach((to, from, next) => {
+router.beforeEach((_, __, next) => {
   if (document.startViewTransition) {
     document.startViewTransition(() => {
       next()

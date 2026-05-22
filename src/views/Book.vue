@@ -4,12 +4,10 @@ import { WTabs, WTab, WDrawer } from '@/components/layouts'
 import { Player, MiniPlayer } from 'Widgets'
 
 import { NCE_JSON } from '@/utils/nce-data'
-import { useRouter } from 'vue-router'
 import { usePlayer } from 'Composables/usePlayer'
 
 const books = ref(NCE_JSON || {})
 
-const router = useRouter()
 const state = reactive({
   isOpen: false,
   title: '',
@@ -24,7 +22,6 @@ const hasPlayHistory = ref(false)
 const {
   isPlaying,
   currentTime,
-  duration,
   loadLesson
 } = usePlayer()
 
@@ -92,8 +89,8 @@ watch(isPlaying, (playing) => {
 
     <w-drawer
       v-model="state.isOpen"
-      position="bottom"
-      height="clamp(85%, 440px, 95%)"
+      position="left"
+      width="clamp(40vw, 460px, 100vw)"
       title="播放器"
       getContainer="body"
       close-on-click-overlay

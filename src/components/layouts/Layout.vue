@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import BackToTop from '../widgets/BackToTop.vue'
 
 const isDark = ref(false)
+let isTransitioning = false
 
 onMounted(() => {
   const root = document.documentElement
@@ -11,37 +12,96 @@ onMounted(() => {
 })
 
 const toggleTheme = (e: MouseEvent | TouchEvent) => {
-  isDark.value = !isDark.value
-
+  if (isTransitioning) return
+  
+  isTransitioning = true
+  const newIsDark = !isDark.value
   const root = document.documentElement
-  const viewTransition = document.startViewTransition?.(() => {
-    root.classList.toggle('dark', isDark.value)
-    root.classList.toggle('light', !isDark.value)
-  })
+  const { clientX, clientY } = e instanceof MouseEvent ? e : e.touches[0]
 
-  viewTransition.ready.then(() => {
-    const { clientX, clientY } = e instanceof MouseEvent ? e : e.touches[0]
+  const radius = Math.hypot(
+    Math.max(clientX, window.innerWidth - clientX),
+    Math.max(clientY, window.innerHeight - clientY)
+  )
 
-    const radius = Math.hypot(
-      Math.max(clientX, window.innerWidth - clientX),
-      Math.max(clientY, window.innerHeight - clientY)
-    )
+  const clipPathStart = `circle(0% at ${clientX}px ${clientY}px)`
+  const clipPathEnd = `circle(${radius}px at ${clientX}px ${clientY}px)`
 
-    const clipPath = [
-      `circle(0% at ${clientX}px ${clientY}px)`,
-      `circle(${radius}px at ${clientX}px ${clientY}px)`
-    ]
+  const animationConfig = {
+    duration: 500,
+    easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    fill: 'forwards' as const
+  }
 
-    document.documentElement.animate(
-      {
-        clipPath: isDark.value ? clipPath.reverse() : clipPath
-      },
-      {
-        duration: 500,
-        pseudoElement: isDark.value ? '::view-transition-old(root)' : '::view-transition-new(root)'
+  const injectTransitionStyles = () => {
+    const styleId = 'theme-transition-styles'
+    let styleEl = document.getElementById(styleId)
+    
+    if (!styleEl) {
+      styleEl = document.createElement('style')
+      styleEl.id = styleId
+      document.head.appendChild(styleEl)
+    }
+
+    styleEl.textContent = `
+      ::view-transition-old(root) {
+        animation: clip-out ${animationConfig.duration}ms ${animationConfig.easing} forwards;
+        z-index: 1;
       }
+      ::view-transition-new(root) {
+        animation: clip-in ${animationConfig.duration}ms ${animationConfig.easing} forwards;
+        z-index: 2;
+      }
+      @keyframes clip-in {
+        from { clip-path: ${clipPathStart}; }
+        to { clip-path: ${clipPathEnd}; }
+      }
+      @keyframes clip-out {
+        from { clip-path: ${clipPathEnd}; }
+        to { clip-path: ${clipPathStart}; }
+      }
+    `
+  }
+
+  const cleanupTransitionStyles = () => {
+    const styleEl = document.getElementById('theme-transition-styles')
+    if (styleEl) {
+      styleEl.remove()
+    }
+  }
+
+  injectTransitionStyles()
+
+  const handleTransitionComplete = () => {
+    cleanupTransitionStyles()
+    isTransitioning = false
+  }
+
+  if (!document.startViewTransition) {
+    const animation = root.animate(
+      [
+        { clipPath: clipPathStart },
+        { clipPath: clipPathEnd }
+      ],
+      animationConfig
     )
-  })
+
+    animation.onfinish = () => {
+      root.classList.toggle('dark', newIsDark)
+      root.classList.toggle('light', !newIsDark)
+      isDark.value = newIsDark
+      handleTransitionComplete()
+    }
+
+    animation.oncancel = handleTransitionComplete
+    return
+  }
+
+  document.startViewTransition(() => {
+    root.classList.toggle('dark', newIsDark)
+    root.classList.toggle('light', !newIsDark)
+    isDark.value = newIsDark
+  }).finished.then(handleTransitionComplete).catch(handleTransitionComplete)
 }
 </script>
 
@@ -82,10 +142,6 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
       </div>
     </header>
     <main class="holy-grail__main">
-      <!-- Left sidebar -->
-      <!-- <aside class="holy-grail__left"></aside> -->
-
-      <!-- Main content -->
       <article class="holy-grail__middle container">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
@@ -94,15 +150,6 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
         </router-view>
         <back-to-top></back-to-top>
       </article>
-
-      <!-- Right sidebar -->
-      <!-- <nav class="holy-grail__right">
-        <ul class="sidebar-nav">
-          <li><router-link to="/todo">Todo</router-link></li>
-          <li><router-link to="/pinia">Pinia</router-link></li>
-          <li><router-link to="/countdown">Countdown</router-link></li>
-        </ul>
-      </nav> -->
     </main>
     <footer class="app-footer">
       <div class="app-footer__container container">
@@ -165,15 +212,6 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
     transform: translateX(-30px);
   }
 }
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
-
-.dark::view-transition-old(root) {
-  z-index: 1;
-}
 </style>
 
 <style>
@@ -185,10 +223,7 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
 
   .holy-grail__main {
     padding-block-start: 8rem;
-    /* Take the remaining height */
     flex-grow: 1;
-
-    /* Layout the left sidebar, main content and right sidebar */
     display: flex;
     flex-direction: row;
   }
@@ -198,7 +233,6 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
   }
 
   .holy-grail__middle {
-    /* Take the remaining width */
     flex-grow: 1;
   }
 

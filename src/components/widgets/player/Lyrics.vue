@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { ref, nextTick, watch, onMounted } from 'vue'
 import type { LRCLine } from 'Types'
 import { formatTime } from 'Utils/common'
 
@@ -36,14 +36,6 @@ const autoScroll = ref(true)
 // DOM 引用
 const lyricsContainer = ref<HTMLElement>()
 const activeLineRef = ref<HTMLElement>()
-
-// 计算属性
-const currentLine = computed(() => {
-  if (props.currentLineIndex >= 0 && props.currentLineIndex < props.lrcLines.length) {
-    return props.lrcLines[props.currentLineIndex]
-  }
-  return null
-})
 
 // 监听当前行变化，自动滚动
 watch(

@@ -1,19 +1,10 @@
-import { ref, computed, onUnmounted, shallowRef, nextTick, reactive } from 'vue'
+import { ref, computed, onUnmounted, shallowRef, reactive } from 'vue'
 import type { Ref } from 'vue'
 import { useOPFS } from './useOPFS'
 import { parseBilingualLRC } from '../utils/lrc-parser'
 import type { LRCLine } from '../types'
 
-export interface LessonInfo {
-  name: string
-  version: string
-  title?: string
-  albumName?: string
-  albumCover?: string
-  duration?: number
-}
-
-export const PlayerState = {
+export const StreamingPlayerState = {
   IDLE: 'idle',
   LOADING: 'loading',
   BUFFERING: 'buffering',
@@ -23,7 +14,7 @@ export const PlayerState = {
   ERROR: 'error'
 } as const
 
-export type PlayerState = (typeof PlayerState)[keyof typeof PlayerState]
+export type StreamingPlayerState = (typeof StreamingPlayerState)[keyof typeof StreamingPlayerState]
 
 export const DownloadStatus = {
   IDLE: 'idle',
@@ -34,6 +25,15 @@ export const DownloadStatus = {
 } as const
 
 export type DownloadStatus = (typeof DownloadStatus)[keyof typeof DownloadStatus]
+
+export interface LessonInfo {
+  name: string
+  version: string
+  title?: string
+  albumName?: string
+  albumCover?: string
+  duration?: number
+}
 
 export interface PlayerOptions {
   autoplay?: boolean
@@ -47,6 +47,9 @@ export interface PlayerOptions {
   enableSentenceLoop?: boolean
   sentenceLoopCount?: number
   continueAfterLoop?: boolean
+  bufferThreshold?: number
+  maxBufferSize?: number
+  cacheMaxSize?: number
 }
 
 export interface DownloadProgress {
@@ -59,12 +62,24 @@ export interface DownloadProgress {
   retryCount: number
 }
 
-export interface UsePlayerReturn {
-  state: Ref<PlayerState>
+export interface CacheStats {
+  usedSize: number
+  maxSize: number
+  fileCount: number
+  files: Array<{
+    name: string
+    size: number
+    lastAccessed: number
+  }>
+}
+
+export interface StreamingPlayerReturn {
+  state: Ref<StreamingPlayerState>
   currentTime: Ref<number>
   duration: Ref<number>
   isPlaying: Ref<boolean>
   isLoading: Ref<boolean>
+  isBuffering: Ref<boolean>
   error: Ref<string>
   volume: Ref<number>
   isMuted: Ref<boolean>
@@ -83,6 +98,8 @@ export interface UsePlayerReturn {
   currentLesson: Ref<LessonInfo | null>
   hasNextLesson: Ref<boolean>
   hasPrevLesson: Ref<boolean>
+  bufferProgress: Ref<number>
+  cacheStats: Ref<CacheStats>
   play: (fromTime?: number) => void
   pause: () => void
   resume: () => void
@@ -97,6 +114,7 @@ export interface UsePlayerReturn {
   nextLesson: () => void
   prevLesson: () => void
   playSentence: (lineIndex: number) => void
+  clearCache: () => Promise<void>
   settings: {
     enableSentenceLoop: boolean
     sentenceLoopCount: number
@@ -105,9 +123,9 @@ export interface UsePlayerReturn {
   lyricsContainerRef: Ref<HTMLElement | null>
 }
 
-let playerInstance: UsePlayerReturn | null = null
+let playerInstance: StreamingPlayerReturn | null = null
 
-function createPlayer(options: PlayerOptions): UsePlayerReturn {
+function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
   const config = {
     autoplay: false,
     loop: false,
@@ -120,6 +138,9 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     enableSentenceLoop: true,
     sentenceLoopCount: 3,
     continueAfterLoop: true,
+    bufferThreshold: 5,
+    maxBufferSize: 5 * 1024 * 1024,
+    cacheMaxSize: 50 * 1024 * 1024,
     ...options
   }
 
@@ -137,13 +158,15 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
   let currentLessonName = ''
   let currentVersion = ''
   let pendingRetry: ReturnType<typeof setTimeout> | null = null
+  let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  let downloadBuffer: Uint8Array[] = []
+  let totalDownloadedBytes = 0
+  let isStreamComplete = false
+  let bufferedUntilTime = 0
 
-  const currentLesson = ref<LessonInfo | null>(null)
-  const hasNextLesson = ref(false)
-  const hasPrevLesson = ref(false)
-
-  const state = ref<PlayerState>(PlayerState.IDLE)
+  const state = ref<StreamingPlayerState>(StreamingPlayerState.IDLE)
   const isPlaying = ref(false)
+  const isBuffering = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
   const volume = ref(config.volume)
@@ -154,9 +177,21 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
   const audioReady = ref(false)
   const lrcLines = ref<LRCLine[]>([])
   const currentLineIndex = ref(-1)
+  const bufferProgress = ref(0)
 
   const isOnline = ref(navigator.onLine)
   const isSlowNetwork = ref(false)
+
+  const currentLesson = ref<LessonInfo | null>(null)
+  const hasNextLesson = ref(false)
+  const hasPrevLesson = ref(false)
+
+  const cacheStats = ref<CacheStats>({
+    usedSize: 0,
+    maxSize: config.cacheMaxSize,
+    fileCount: 0,
+    files: []
+  })
 
   const mp3DownloadProgress = ref<DownloadProgress>({
     status: DownloadStatus.IDLE,
@@ -184,7 +219,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
 
   const lyricsContainerRef = ref<HTMLElement | null>(null)
 
-  const { cacheFile, readFile, fileExists } = useOPFS()
+  const { cacheFile, readFile, fileExists, deleteFile } = useOPFS()
 
   const currentLine = computed(() =>
     currentLineIndex.value >= 0 ? lrcLines.value[currentLineIndex.value] : null
@@ -223,7 +258,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
   }
 
   const scrollToCurrentLine = async (): Promise<void> => {
-    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
     const container = lyricsContainerRef.value || document.body
     if (!container) return
 
@@ -231,7 +266,6 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     if (!activeLine) return
 
     const lineRect = activeLine.getBoundingClientRect()
-
     const scrollTop = activeLine.offsetTop - container.offsetHeight / 2 + lineRect.height / 2
 
     container.scrollTo({
@@ -244,7 +278,6 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     const idx = lrcLines.value.findLastIndex(line => line.time <= time)
     if (idx !== currentLineIndex.value) {
       currentLineIndex.value = idx
-
       if (idx >= 0) {
         scrollToCurrentLine()
       }
@@ -260,6 +293,12 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
 
     updateCurrentLine(currentTime.value)
     checkSentenceEnd()
+
+    if (isStreamComplete && currentTime.value >= duration.value) {
+      pause()
+      state.value = StreamingPlayerState.ENDED
+      return
+    }
 
     animationId = requestAnimationFrame(updateTime)
   }
@@ -289,35 +328,121 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     }
   }
 
-  const createSourceNode = (): AudioBufferSourceNode | null => {
+  const scheduleNextBufferCheck = (): void => {
+    if (!isPlaying.value || isStreamComplete) return
+
+    const bufferAhead = bufferedUntilTime - currentTime.value
+    
+    if (bufferAhead < config.bufferThreshold && !isBuffering.value) {
+      isBuffering.value = true
+      state.value = StreamingPlayerState.BUFFERING
+      pause()
+    }
+
+    if (bufferAhead >= config.bufferThreshold && isBuffering.value) {
+      isBuffering.value = false
+      if (state.value === StreamingPlayerState.BUFFERING) {
+        state.value = StreamingPlayerState.PLAYING
+        resume()
+      }
+    }
+
+    setTimeout(scheduleNextBufferCheck, 500)
+  }
+
+  const createSourceNode = (startOffset: number, endOffset?: number): AudioBufferSourceNode | null => {
     if (!audioContext.value || !audioBuffer.value) return null
 
-    const source = audioContext.value.createBufferSource()
-    source.buffer = audioBuffer.value
+    const ctx = audioContext.value
+    const buffer = audioBuffer.value
+    
+    const actualEnd = endOffset && endOffset < buffer.duration ? endOffset : buffer.duration
+    const segmentDuration = actualEnd - startOffset
+
+    if (segmentDuration <= 0) return null
+
+    const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(
+      buffer.numberOfChannels,
+      segmentDuration * buffer.sampleRate,
+      buffer.sampleRate
+    )
+
+    const segmentBuffer = offlineCtx.createBuffer(
+      buffer.numberOfChannels,
+      Math.floor(segmentDuration * buffer.sampleRate),
+      buffer.sampleRate
+    )
+
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const sourceData = buffer.getChannelData(channel)
+      const targetData = segmentBuffer.getChannelData(channel)
+      const startSample = Math.floor(startOffset * buffer.sampleRate)
+      const endSample = Math.floor(actualEnd * buffer.sampleRate)
+      
+      targetData.set(sourceData.subarray(startSample, endSample))
+    }
+
+    const source = ctx.createBufferSource()
+    source.buffer = segmentBuffer
     source.playbackRate.value = playbackRate.value
 
     if (gainNode.value) {
       source.connect(gainNode.value)
     } else {
-      source.connect(audioContext.value.destination)
+      source.connect(ctx.destination)
     }
 
     source.onended = () => {
-      isPlaying.value = false
-      state.value = PlayerState.ENDED
-      currentSentenceIndex = -1
-      sentenceLoopCount = 0
+      if (isPlaying.value && !isStreamComplete) {
+        const newOffset = startOffset + segmentDuration
+        if (newOffset < bufferedUntilTime) {
+          schedulePlayFrom(newOffset)
+        } else if (!isBuffering.value) {
+          isBuffering.value = true
+          state.value = StreamingPlayerState.BUFFERING
+        }
+      } else if (currentTime.value >= duration.value) {
+        isPlaying.value = false
+        state.value = StreamingPlayerState.ENDED
+      }
     }
 
     return source
   }
 
+  const schedulePlayFrom = (fromTime: number): void => {
+    if (!audioContext.value || !isPlaying.value) return
+
+    stopCurrentSource()
+    if (animationId) {
+      cancelAnimationFrame(animationId)
+      animationId = null
+    }
+
+    const nextSentenceIndex = lrcLines.value.findIndex(line => line.time > fromTime)
+    const endOffset = nextSentenceIndex >= 0 ? lrcLines.value[nextSentenceIndex].time : undefined
+
+    sourceNode.value = createSourceNode(fromTime, endOffset)
+    if (!sourceNode.value) return
+
+    startTime = audioContext.value.currentTime
+    offset = fromTime
+    sourceNode.value.start(0, 0)
+
+    animationId = requestAnimationFrame(updateTime)
+  }
+
   const play = (fromTime?: number): void => {
-    if (!audioBuffer.value || !audioContext.value) return
+    if (!audioBuffer.value) {
+      if (isLoading.value) {
+        return
+      }
+      return
+    }
 
     const ctx = getContext()
 
-    if (currentTime.value >= duration.value) {
+    if (currentTime.value >= duration.value && duration.value > 0) {
       offset = 0
       currentTime.value = 0
       currentLineIndex.value = -1
@@ -326,24 +451,25 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     }
 
     stopCurrentSource()
-
     if (animationId) {
       cancelAnimationFrame(animationId)
       animationId = null
     }
 
-    sourceNode.value = createSourceNode()
+    const playTime = fromTime !== undefined ? fromTime : offset
+    const nextSentenceIndex = lrcLines.value.findIndex(line => line.time > playTime)
+    const endOffset = nextSentenceIndex >= 0 ? lrcLines.value[nextSentenceIndex].time : undefined
+
+    sourceNode.value = createSourceNode(playTime, endOffset)
     if (!sourceNode.value) return
 
     startTime = ctx.currentTime
-    const startOffset = fromTime !== undefined ? fromTime : offset
-    sourceNode.value.start(0, startOffset)
-
     isPlaying.value = true
-    state.value = PlayerState.PLAYING
-    offset = startOffset
+    state.value = StreamingPlayerState.PLAYING
+    offset = playTime
 
     animationId = requestAnimationFrame(updateTime)
+    scheduleNextBufferCheck()
   }
 
   const pause = (): void => {
@@ -355,7 +481,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
 
     stopCurrentSource()
     isPlaying.value = false
-    state.value = PlayerState.PAUSED
+    state.value = StreamingPlayerState.PAUSED
 
     if (animationId) {
       cancelAnimationFrame(animationId)
@@ -452,19 +578,9 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     currentLineIndex.value = lineIndex
 
     if (wasPlaying) {
-      const ctx = getContext()
-      sourceNode.value = createSourceNode()
-      if (!sourceNode.value) return
-
-      startTime = ctx.currentTime
-      sourceNode.value.start(0, line.time)
-
-      isPlaying.value = true
-      state.value = PlayerState.PLAYING
-
-      animationId = requestAnimationFrame(updateTime)
+      play(line.time)
     } else {
-      state.value = PlayerState.PAUSED
+      state.value = StreamingPlayerState.PAUSED
     }
   }
 
@@ -501,14 +617,10 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     }
   }
 
-  const downloadAndCache = async (
-    url: string,
-    fileName: string,
-    progressRef: Ref<DownloadProgress>
-  ): Promise<ArrayBuffer> => {
+  const downloadLRC = async (url: string, fileName: string): Promise<void> => {
     const exists = await fileExists(fileName)
     if (exists) {
-      progressRef.value = {
+      lrcDownloadProgress.value = {
         status: DownloadStatus.COMPLETED,
         progress: 100,
         downloadedBytes: 0,
@@ -516,10 +628,69 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
         fileName,
         retryCount: 0
       }
-      return await readFile(fileName)
+      return
     }
 
-    progressRef.value = {
+    lrcDownloadProgress.value = {
+      status: DownloadStatus.DOWNLOADING,
+      progress: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      fileName,
+      retryCount: 0
+    }
+
+    try {
+      const response = await fetchWithRetry(url)
+      const text = await response.text()
+      const buffer = new TextEncoder().encode(text).buffer
+      await cacheFile(fileName, buffer)
+
+      lrcDownloadProgress.value = {
+        status: DownloadStatus.COMPLETED,
+        progress: 100,
+        downloadedBytes: buffer.byteLength,
+        totalBytes: buffer.byteLength,
+        fileName,
+        retryCount: 0
+      }
+    } catch (err) {
+      lrcDownloadProgress.value = {
+        status: DownloadStatus.FAILED,
+        progress: 0,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        fileName,
+        error: err instanceof Error ? err.message : '下载失败',
+        retryCount: config.maxRetries + 1
+      }
+      throw err
+    }
+  }
+
+  const streamAudio = async (url: string, fileName: string): Promise<void> => {
+    const exists = await fileExists(fileName)
+    if (exists) {
+      const buffer = await readFile(fileName)
+      audioBuffer.value = await getContext().decodeAudioData(buffer)
+      duration.value = audioBuffer.value.duration
+      bufferedUntilTime = duration.value
+      isStreamComplete = true
+      bufferProgress.value = 100
+
+      mp3DownloadProgress.value = {
+        status: DownloadStatus.COMPLETED,
+        progress: 100,
+        downloadedBytes: buffer.byteLength,
+        totalBytes: buffer.byteLength,
+        fileName,
+        retryCount: 0
+      }
+
+      return
+    }
+
+    mp3DownloadProgress.value = {
       status: DownloadStatus.DOWNLOADING,
       progress: 0,
       downloadedBytes: 0,
@@ -533,64 +704,122 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
 
     while (retries >= 0) {
       try {
-        const response = await fetchWithRetry(url, {}, retries)
-
+        const response = await fetchWithRetry(url)
+        
         const contentLength = response.headers.get('content-length')
         const totalBytes = contentLength ? parseInt(contentLength, 10) : 0
-        progressRef.value.totalBytes = totalBytes
+        mp3DownloadProgress.value.totalBytes = totalBytes
 
-        const reader = response.body?.getReader()
-        if (!reader) {
+        if (totalBytes > 0) {
+          const sampleRate = 44100
+          const durationSeconds = totalBytes / (44.1 * 1024)
+          duration.value = durationSeconds
+        }
+
+        streamReader = response.body?.getReader()
+        if (!streamReader) {
           throw new Error('无法获取响应流')
         }
 
-        const chunks: Uint8Array[] = []
-        let downloadedBytes = 0
+        downloadBuffer = []
+        totalDownloadedBytes = 0
+
+        let cachedChunks: Uint8Array[] = []
+        let cacheBytes = 0
+        const cacheThreshold = 1024 * 1024
 
         while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
+          const { done, value } = await streamReader.read()
+          
+          if (done) {
+            isStreamComplete = true
+            break
+          }
 
-          chunks.push(value)
-          downloadedBytes += value.length
+          downloadBuffer.push(value)
+          totalDownloadedBytes += value.length
 
-          progressRef.value.downloadedBytes = downloadedBytes
-          progressRef.value.progress = totalBytes
-            ? Math.round((downloadedBytes / totalBytes) * 100)
-            : Math.min(99, (downloadedBytes / 1024 / 1024) * 10)
+          cachedChunks.push(value)
+          cacheBytes += value.length
+
+          if (cacheBytes >= cacheThreshold) {
+            const totalCacheBuffer = new Uint8Array(cacheBytes)
+            let offset = 0
+            for (const chunk of cachedChunks) {
+              totalCacheBuffer.set(chunk, offset)
+              offset += chunk.length
+            }
+            
+            await cacheFile(`${fileName}.partial`, totalCacheBuffer.buffer.slice(0))
+            cachedChunks = []
+            cacheBytes = 0
+          }
+
+          mp3DownloadProgress.value.downloadedBytes = totalDownloadedBytes
+          mp3DownloadProgress.value.progress = totalBytes
+            ? Math.round((totalDownloadedBytes / totalBytes) * 100)
+            : Math.min(99, (totalDownloadedBytes / 1024 / 1024) * 10)
+
+          const totalBuffer = new Uint8Array(totalDownloadedBytes)
+          let bufOffset = 0
+          for (const chunk of downloadBuffer) {
+            totalBuffer.set(chunk, bufOffset)
+            bufOffset += chunk.length
+          }
+
+          try {
+            audioBuffer.value = await getContext().decodeAudioData(totalBuffer.buffer.slice(0))
+            bufferedUntilTime = audioBuffer.value.duration * (totalDownloadedBytes / (totalBytes || totalDownloadedBytes))
+            bufferProgress.value = (totalDownloadedBytes / (totalBytes || totalDownloadedBytes)) * 100
+
+            if (!audioReady.value && bufferedUntilTime >= config.bufferThreshold) {
+              audioReady.value = true
+              state.value = StreamingPlayerState.IDLE
+              isLoading.value = false
+
+              if (config.autoplay) {
+                play(0)
+              }
+            }
+          } catch {
+          }
         }
 
-        const totalBuffer = new Uint8Array(downloadedBytes)
-        let offset = 0
-        for (const chunk of chunks) {
-          totalBuffer.set(chunk, offset)
-          offset += chunk.length
+        const finalBuffer = new Uint8Array(totalDownloadedBytes)
+        let finalOffset = 0
+        for (const chunk of downloadBuffer) {
+          finalBuffer.set(chunk, finalOffset)
+          finalOffset += chunk.length
         }
 
-        const resultBuffer = totalBuffer.buffer.slice(0)
-        const cacheBuffer = totalBuffer.buffer.slice(0)
-        await cacheFile(fileName, cacheBuffer)
+        await cacheFile(fileName, finalBuffer.buffer.slice(0))
 
-        progressRef.value = {
+        try {
+          await deleteFile(`${fileName}.partial`)
+        } catch {}
+
+        mp3DownloadProgress.value = {
           status: DownloadStatus.COMPLETED,
           progress: 100,
-          downloadedBytes,
-          totalBytes,
+          downloadedBytes: totalDownloadedBytes,
+          totalBytes: totalBytes || totalDownloadedBytes,
           fileName,
           retryCount: 0
         }
 
-        return resultBuffer
+        bufferProgress.value = 100
+
+        return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error('下载失败')
         retries--
 
         if (retries >= 0) {
-          progressRef.value = {
+          mp3DownloadProgress.value = {
             status: DownloadStatus.RETRYING,
-            progress: progressRef.value.progress,
-            downloadedBytes: progressRef.value.downloadedBytes,
-            totalBytes: progressRef.value.totalBytes,
+            progress: mp3DownloadProgress.value.progress,
+            downloadedBytes: mp3DownloadProgress.value.downloadedBytes,
+            totalBytes: mp3DownloadProgress.value.totalBytes,
             fileName,
             error: `重试中 (${config.maxRetries - retries}/${config.maxRetries})`,
             retryCount: config.maxRetries - retries
@@ -598,11 +827,11 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
 
           await new Promise(resolve => setTimeout(resolve, config.retryDelay))
         } else {
-          progressRef.value = {
+          mp3DownloadProgress.value = {
             status: DownloadStatus.FAILED,
-            progress: progressRef.value.progress,
-            downloadedBytes: progressRef.value.downloadedBytes,
-            totalBytes: progressRef.value.totalBytes,
+            progress: mp3DownloadProgress.value.progress,
+            downloadedBytes: mp3DownloadProgress.value.downloadedBytes,
+            totalBytes: mp3DownloadProgress.value.totalBytes,
             fileName,
             error: lastError.message,
             retryCount: config.maxRetries + 1
@@ -623,9 +852,13 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     abortController = new AbortController()
 
     try {
-      state.value = PlayerState.LOADING
+      state.value = StreamingPlayerState.LOADING
       isLoading.value = true
       error.value = ''
+      audioReady.value = false
+      isStreamComplete = false
+      downloadBuffer = []
+      totalDownloadedBytes = 0
 
       currentLessonName = name
       currentVersion = version
@@ -641,10 +874,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
         lrc: `${basePath}/${name}.lrc`
       }
 
-      const [mp3Buffer] = await Promise.all([
-        downloadAndCache(urls.mp3, files.mp3, mp3DownloadProgress),
-        downloadAndCache(urls.lrc, files.lrc, lrcDownloadProgress)
-      ])
+      await downloadLRC(urls.lrc, files.lrc)
 
       const lrcBuffer = await readFile(files.lrc)
       const lrcText = new TextDecoder('utf-8').decode(lrcBuffer)
@@ -655,16 +885,12 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
       gainNode.value.connect(ctx.destination)
       gainNode.value.gain.value = isMuted.value ? 0 : volume.value
 
-      if (!(mp3Buffer instanceof ArrayBuffer)) {
-        throw new Error(`Invalid buffer type: ${typeof mp3Buffer}`)
+      await streamAudio(urls.mp3, files.mp3)
+
+      if (!isStreamComplete && audioBuffer.value) {
+        duration.value = audioBuffer.value.duration * (mp3DownloadProgress.value.totalBytes ? 
+          mp3DownloadProgress.value.downloadedBytes / mp3DownloadProgress.value.totalBytes : 1)
       }
-
-      audioBuffer.value = await ctx.decodeAudioData(mp3Buffer)
-      duration.value = audioBuffer.value.duration
-
-      audioReady.value = true
-      state.value = PlayerState.IDLE
-      isLoading.value = false
 
       const lessonMatch = name.match(/(\d+)－/)
       const lessonNum = lessonMatch ? parseInt(lessonMatch[1]) : 0
@@ -674,7 +900,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
         version,
         title: name,
         albumName: version,
-        duration: audioBuffer.value.duration
+        duration: duration.value
       }
       hasPrevLesson.value = lessonNum > 1
       hasNextLesson.value = lessonNum > 0
@@ -684,11 +910,10 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
       currentLineIndex.value = -1
       currentSentenceIndex = -1
       sentenceLoopCount = 0
-
-      if (config.autoplay) play()
     } catch (err) {
-      state.value = PlayerState.ERROR
+      state.value = StreamingPlayerState.ERROR
       isLoading.value = false
+      isBuffering.value = false
       error.value = err instanceof Error ? err.message : '未知错误'
       throw err
     } finally {
@@ -728,6 +953,15 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     }
   }
 
+  const clearCache = async (): Promise<void> => {
+    cacheStats.value = {
+      usedSize: 0,
+      maxSize: config.cacheMaxSize,
+      fileCount: 0,
+      files: []
+    }
+  }
+
   const checkNetworkStatus = (): void => {
     isOnline.value = navigator.onLine
 
@@ -746,6 +980,10 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     if (isPlaying.value) pause()
     if (animationId) cancelAnimationFrame(animationId)
     if (sourceNode.value) stopCurrentSource()
+    if (streamReader) {
+      streamReader.cancel()
+      streamReader = null
+    }
     if (audioContext.value) {
       audioContext.value.close()
     }
@@ -778,6 +1016,7 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     duration,
     isPlaying,
     isLoading,
+    isBuffering,
     error,
     volume,
     isMuted,
@@ -796,6 +1035,8 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     currentLesson,
     hasNextLesson,
     hasPrevLesson,
+    bufferProgress,
+    cacheStats,
     play,
     pause,
     resume,
@@ -810,14 +1051,15 @@ function createPlayer(options: PlayerOptions): UsePlayerReturn {
     nextLesson,
     prevLesson,
     playSentence,
+    clearCache,
     settings,
     lyricsContainerRef
   }
 }
 
-export function usePlayer(options: PlayerOptions = {}): UsePlayerReturn {
+export function useStreamingPlayer(options: PlayerOptions = {}): StreamingPlayerReturn {
   if (!playerInstance) {
-    playerInstance = createPlayer(options)
+    playerInstance = createStreamingPlayer(options)
   }
   return playerInstance
 }
