@@ -3,6 +3,8 @@ import type { Ref } from 'vue'
 import { useOPFS } from './useOPFS'
 import { parseBilingualLRC } from '../utils/lrc-parser'
 import { NCE_JSON } from '../utils/nce-data'
+import { summarizeCacheFiles } from '../utils/cache-stats'
+import { createPlaybackSession } from '../utils/playback-session'
 import type { LRCLine } from '../types'
 
 export const StreamingPlayerState = {
@@ -164,6 +166,8 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
   let totalDownloadedBytes = 0
   let isStreamComplete = false
   let bufferedUntilTime = 0
+  const playbackSession = createPlaybackSession()
+  let bufferCheckTimer: ReturnType<typeof setTimeout> | null = null
 
   const state = ref<StreamingPlayerState>(StreamingPlayerState.IDLE)
   const isPlaying = ref(false)
@@ -254,9 +258,13 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     }
   }
 
-  const stopCurrentSource = (): void => {
+  const stopCurrentSource = (invalidateSession = true): void => {
+    if (invalidateSession) {
+      playbackSession.invalidate()
+    }
     if (sourceNode.value) {
       try {
+        sourceNode.value.onended = null
         sourceNode.value.stop()
       } catch {}
       sourceNode.value.disconnect()
@@ -329,8 +337,8 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     }
   }
 
-  const scheduleNextBufferCheck = (): void => {
-    if (!isPlaying.value || isStreamComplete) return
+  const scheduleNextBufferCheck = (generation = playbackSession.current): void => {
+    if (!playbackSession.isCurrent(generation) || !isPlaying.value || isStreamComplete) return
 
     const bufferAhead = bufferedUntilTime - currentTime.value
     
@@ -348,10 +356,17 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       }
     }
 
-    setTimeout(scheduleNextBufferCheck, 500)
+    if (bufferCheckTimer) {
+      clearTimeout(bufferCheckTimer)
+    }
+    bufferCheckTimer = setTimeout(() => scheduleNextBufferCheck(generation), 500)
   }
 
-  const createSourceNode = (startOffset: number, endOffset?: number): AudioBufferSourceNode | null => {
+  const createSourceNode = (
+    startOffset: number,
+    endOffset?: number,
+    generation = playbackSession.current
+  ): AudioBufferSourceNode | null => {
     if (!audioContext.value || !audioBuffer.value) {
       console.warn('[useStreamingPlayer] Cannot create source node: missing context or buffer')
       return null
@@ -443,6 +458,11 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
 
     source.onended = () => {
       console.log('[useStreamingPlayer] Source node ended')
+
+      if (!playbackSession.isCurrent(generation)) {
+        console.log('[useStreamingPlayer] Ignoring stale source ended callback')
+        return
+      }
       
       if (!isPlaying.value) {
         console.log('[useStreamingPlayer] Source ended but not playing, skipping')
@@ -481,7 +501,8 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       return
     }
 
-    stopCurrentSource()
+    const generation = playbackSession.next()
+    stopCurrentSource(false)
     if (animationId) {
       cancelAnimationFrame(animationId)
       animationId = null
@@ -491,7 +512,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     const endOffset = nextSentenceIndex >= 0 ? lrcLines.value[nextSentenceIndex].time : undefined
     console.log('[useStreamingPlayer] schedulePlayFrom:', { fromTime, endOffset, nextSentenceIndex })
 
-    sourceNode.value = createSourceNode(fromTime, endOffset)
+    sourceNode.value = createSourceNode(fromTime, endOffset, generation)
     if (!sourceNode.value) {
       console.error('[useStreamingPlayer] schedulePlayFrom: failed to create source node')
       return
@@ -500,6 +521,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     const ctx = audioContext.value
     startTime = ctx.currentTime
     offset = fromTime
+    isBuffering.value = false
     
     console.log('[useStreamingPlayer] schedulePlayFrom: starting source node')
     sourceNode.value.start(0)
@@ -518,7 +540,16 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       return
     }
 
+    const generation = playbackSession.next()
+    stopCurrentSource(false)
+    if (animationId) {
+      cancelAnimationFrame(animationId)
+      animationId = null
+    }
+
     await ensureContextRunning()
+    if (!playbackSession.isCurrent(generation)) return
+
     const ctx = getContext()
     console.log('[useStreamingPlayer] AudioContext state:', ctx.state)
 
@@ -530,12 +561,6 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       sentenceLoopCount = 0
     }
 
-    stopCurrentSource()
-    if (animationId) {
-      cancelAnimationFrame(animationId)
-      animationId = null
-    }
-
     const playTime = fromTime !== undefined ? fromTime : offset
     console.log('[useStreamingPlayer] Starting playback from:', playTime)
     
@@ -543,7 +568,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     const endOffset = nextSentenceIndex >= 0 ? lrcLines.value[nextSentenceIndex].time : undefined
     console.log('[useStreamingPlayer] End offset:', endOffset)
 
-    sourceNode.value = createSourceNode(playTime, endOffset)
+    sourceNode.value = createSourceNode(playTime, endOffset, generation)
     if (!sourceNode.value) {
       console.error('[useStreamingPlayer] Failed to create source node')
       return
@@ -552,6 +577,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     console.log('[useStreamingPlayer] Starting source node, gain:', gainNode.value?.gain?.value)
     startTime = ctx.currentTime
     isPlaying.value = true
+    isBuffering.value = false
     state.value = StreamingPlayerState.PLAYING
     offset = playTime
 
@@ -559,7 +585,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     console.log('[useStreamingPlayer] sourceNode.start() called successfully')
 
     animationId = requestAnimationFrame(updateTime)
-    scheduleNextBufferCheck()
+    scheduleNextBufferCheck(generation)
   }
 
   const pause = (): void => {
@@ -572,6 +598,12 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     stopCurrentSource()
     isPlaying.value = false
     state.value = StreamingPlayerState.PAUSED
+    isBuffering.value = false
+
+    if (bufferCheckTimer) {
+      clearTimeout(bufferCheckTimer)
+      bufferCheckTimer = null
+    }
 
     if (animationId) {
       cancelAnimationFrame(animationId)
@@ -649,15 +681,8 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     }
 
     const wasPlaying = isPlaying.value
-
-    if (wasPlaying) {
-      const elapsed = audioContext.value?.currentTime
-        ? audioContext.value.currentTime - startTime + offset
-        : currentTime.value
-      offset = Math.min(elapsed, duration.value)
-    }
-
-    stopCurrentSource()
+    playbackSession.next()
+    stopCurrentSource(false)
     if (animationId) {
       cancelAnimationFrame(animationId)
       animationId = null
@@ -666,9 +691,10 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     offset = line.time
     currentTime.value = line.time
     currentLineIndex.value = lineIndex
+    isBuffering.value = false
 
     if (wasPlaying) {
-      play(line.time)
+      void play(line.time)
     } else {
       state.value = StreamingPlayerState.PAUSED
     }
@@ -715,11 +741,12 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       console.log('[useStreamingPlayer] LRC file exists in cache:', exists)
       
       if (exists) {
+        const buffer = await readFile(fileName)
         lrcDownloadProgress.value = {
           status: DownloadStatus.COMPLETED,
           progress: 100,
-          downloadedBytes: 0,
-          totalBytes: 0,
+          downloadedBytes: buffer.byteLength,
+          totalBytes: buffer.byteLength,
           fileName,
           retryCount: 0
         }
@@ -804,6 +831,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
           fileName,
           retryCount: 0
         }
+        await updateCacheStats()
         
         console.log('[useStreamingPlayer] streamAudio completed from cache')
         return
@@ -939,8 +967,6 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
         await cacheFile(fileName, finalData)
         console.log('[useStreamingPlayer] Final file cached successfully')
         
-        await updateCacheStats()
-
         if (cachedChunks.length > 0) {
           console.log('[useStreamingPlayer] Cleaning up partial cache')
           try {
@@ -965,6 +991,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
         }
 
         bufferProgress.value = 100
+        await updateCacheStats()
 
         return
       } catch (err) {
@@ -1019,6 +1046,9 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       isStreamComplete = false
       downloadBuffer = []
       totalDownloadedBytes = 0
+      bufferProgress.value = 0
+      bufferedUntilTime = 0
+      stopCurrentSource()
 
       console.log('[useStreamingPlayer] State set to LOADING, isLoading:', isLoading.value)
 
@@ -1134,17 +1164,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
   const updateCacheStats = async (): Promise<void> => {
     try {
       const files = await listFiles()
-      const usedSize = files.reduce((total, file) => total + file.size, 0)
-      cacheStats.value = {
-        usedSize,
-        maxSize: config.cacheMaxSize,
-        fileCount: files.length,
-        files: files.map(file => ({
-          name: file.name,
-          size: file.size,
-          lastAccessed: file.lastAccessed
-        }))
-      }
+      cacheStats.value = summarizeCacheFiles(files, config.cacheMaxSize)
     } catch (err) {
       console.error('[useStreamingPlayer] Failed to update cache stats:', err)
     }
@@ -1183,6 +1203,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
   const destroy = (): void => {
     if (isPlaying.value) pause()
     if (animationId) cancelAnimationFrame(animationId)
+    if (bufferCheckTimer) clearTimeout(bufferCheckTimer)
     if (sourceNode.value) stopCurrentSource()
     if (streamReader) {
       streamReader.cancel()

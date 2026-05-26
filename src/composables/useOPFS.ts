@@ -25,51 +25,40 @@ export function useOPFS() {
       currentWorker.onmessage = (e: MessageEvent) => {
         const { type, payload } = e.data
         const requestId = payload.requestId
-        if (type === 'cache_complete' || type === 'delete_complete') {
+        const resolveRequest = (value: any) => {
           const resolve = pending.get(requestId)
           if (resolve) {
-            resolve(true)
+            resolve(value)
             pending.delete(requestId)
+            pendingRejects.delete(requestId)
           }
         }
+
+        if (type === 'cache_complete' || type === 'delete_complete') {
+          resolveRequest(true)
+        }
         else if (type === 'file_data') {
-          const resolve = pending.get(requestId)
-          if (resolve) {
-            const buffer = payload.buffer
-            if (buffer instanceof ArrayBuffer) {
-              resolve(buffer)
-            } else if (buffer instanceof Uint8Array) {
-              const ab = new ArrayBuffer(buffer.length)
-              const view = new Uint8Array(ab)
-              view.set(buffer)
-              resolve(ab)
-            } else {
-              console.error('Unexpected buffer type:', buffer)
-              resolve(buffer)
-            }
-            pending.delete(requestId)
+          const buffer = payload.buffer
+          if (buffer instanceof ArrayBuffer) {
+            resolveRequest(buffer)
+          } else if (buffer instanceof Uint8Array) {
+            const ab = new ArrayBuffer(buffer.length)
+            const view = new Uint8Array(ab)
+            view.set(buffer)
+            resolveRequest(ab)
+          } else {
+            console.error('Unexpected buffer type:', buffer)
+            resolveRequest(buffer)
           }
         }
         else if (type === 'exists_result') {
-          const resolve = pending.get(requestId)
-          if (resolve) {
-            resolve(payload.exists)
-            pending.delete(requestId)
-          }
+          resolveRequest(payload.exists)
         }
         else if (type === 'list_files_result') {
-          const resolve = pending.get(requestId)
-          if (resolve) {
-            resolve(payload.files)
-            pending.delete(requestId)
-          }
+          resolveRequest(payload.files)
         }
         else if (type === 'clear_cache_complete') {
-          const resolve = pending.get(requestId)
-          if (resolve) {
-            resolve(payload.deletedFiles)
-            pending.delete(requestId)
-          }
+          resolveRequest(payload.deletedFiles)
         }
         else if (type === 'error') {
           console.error('[useOPFS] Worker error:', payload.message)

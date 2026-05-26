@@ -6,6 +6,7 @@ import { Player, MiniPlayer } from 'Widgets'
 import { NCE_JSON } from '@/utils/nce-data'
 import { usePlayer } from 'Composables/usePlayer'
 import { useLearningProgress } from '@/composables/useLearningProgress'
+import { buildLessonGroups, getLessonTitle } from '@/utils/lesson-library'
 
 const books = ref(NCE_JSON || {})
 
@@ -34,7 +35,8 @@ const themeRules = [
   { id: 'daily', label: '日常沟通', pattern: /shirt|coffee|holiday|weekend|doctor|kitchen|weather|supper|shopping|passport|teacher|breakfast/i },
   { id: 'story', label: '故事叙事', pattern: /story|dream|ghost|alibi|escape|mine|murder|puma|titanic|island|gangster/i },
   { id: 'culture', label: '文化社会', pattern: /education|industry|banks|culture|government|sporting|old|youth|city|press/i },
-  { id: 'science', label: '科学自然', pattern: /volcanoes|hubble|sound|space|noise|river|bats|fossil|snake|earth|electric|bridge/i }
+  { id: 'science', label: '科学自然', pattern: /volcanoes|hubble|sound|space|noise|river|bats|fossil|snake|earth|electric|bridge/i },
+  { id: 'general', label: '综合能力', pattern: /$a/ }
 ]
 
 const {
@@ -53,58 +55,24 @@ const {
   updateSettings
 } = useLearningProgress()
 
-const getLessonTitle = (fileName: string) => {
-  return 'Lesson ' + fileName.split('－')[0]
-}
-
-const getTheme = (lessonName: string) => {
-  return themeRules.find(rule => rule.pattern.test(lessonName))?.id || 'daily'
-}
-
 const getThemeLabel = (themeId: string) => {
   return themeRules.find(rule => rule.id === themeId)?.label || '综合'
 }
 
-const flattenedLessons = computed(() => {
-  return Object.entries(books.value).flatMap(([version, lessons]) =>
-    lessons.map(lesson => {
-      const progress = getProgress(version, lesson.fileName)
-      const theme = getTheme(`${lesson.fileName} ${lesson.name}`)
-      const completedLines = progress?.completedLines.length || 0
-      const score = progress?.pronunciationScores.at(-1) || 0
-
-      return {
-        ...lesson,
-        version,
-        title: getLessonTitle(lesson.fileName),
-        level: levelMeta[version as keyof typeof levelMeta]?.label || version,
-        levelDescription: levelMeta[version as keyof typeof levelMeta]?.description || '',
-        theme,
-        progress,
-        completion: Math.min(100, Math.round((completedLines / 8) * 100)),
-        score
-      }
-    })
-  )
-})
-
-const filteredLessons = computed(() => {
-  const keyword = searchText.value.trim().toLowerCase()
-  return flattenedLessons.value.filter(lesson => {
-    const matchesLevel = selectedLevel.value === 'all' || lesson.version === selectedLevel.value
-    const matchesTheme = selectedTheme.value === 'all' || lesson.theme === selectedTheme.value
-    const matchesSearch = !keyword || `${lesson.fileName} ${lesson.name}`.toLowerCase().includes(keyword)
-    return matchesLevel && matchesTheme && matchesSearch
+const lessonLibrary = computed(() => {
+  return buildLessonGroups(books.value, {
+    selectedLevel: selectedLevel.value,
+    selectedTheme: selectedTheme.value,
+    searchText: searchText.value,
+    levelMeta,
+    themeRules,
+    getProgress
   })
 })
 
-const groupedLessons = computed(() => {
-  return filteredLessons.value.reduce<Record<string, typeof filteredLessons.value>>((groups, lesson) => {
-    if (!groups[lesson.version]) groups[lesson.version] = []
-    groups[lesson.version].push(lesson)
-    return groups
-  }, {})
-})
+const flattenedLessons = computed(() => lessonLibrary.value.lessons)
+
+const groupedLessons = computed(() => lessonLibrary.value.groups)
 
 const dailyGoalPercent = computed(() => {
   const goalSeconds = settings.value.dailyGoalMinutes * 60

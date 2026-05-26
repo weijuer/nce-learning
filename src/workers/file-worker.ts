@@ -15,7 +15,9 @@ ctx.onmessage = async (e: MessageEvent) => {
       const root = await navigator.storage.getDirectory();
       const fileHandle = await root.getFileHandle(path, { create: true });
       const accessHandle = await fileHandle.createSyncAccessHandle();
+      accessHandle.truncate(0);
       accessHandle.write(data);
+      accessHandle.truncate(data.byteLength);
       accessHandle.flush();
       accessHandle.close();
       ctx.postMessage({ type: "cache_complete", payload: { path, requestId } });
