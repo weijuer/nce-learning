@@ -1,19 +1,20 @@
 <template>
-  <div class="player-container" :class="{ 'is-loading': isLoading }">
-    <!-- <div v-if="!isOnline" class="network-warning offline">
+  <div class="player-container" :class="{ 'is-loading': isLoading, 'is-buffering': isBuffering }">
+    <!-- 网络状态提示 -->
+    <div v-if="!isOnline" class="network-warning offline">
       <span class="warning-icon">⚠️</span>
       <span>您已离线，请检查网络连接</span>
     </div>
     <div v-else-if="isSlowNetwork" class="network-warning slow">
       <span class="warning-icon">📶</span>
       <span>当前网络较慢，可能影响加载速度</span>
-    </div> -->
+    </div>
 
+    <!-- 加载状态 -->
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-content">
         <div class="loading-spinner">
           <div class="spinner-ring"></div>
-          <div class="spinner-dot"></div>
         </div>
         <div class="loading-text">
           <h3>Loading Resources</h3>
@@ -55,6 +56,15 @@
       </div>
     </div>
 
+    <!-- 缓冲状态 -->
+    <div v-if="isBuffering" class="buffering-overlay">
+      <div class="buffering-content">
+        <div class="buffering-spinner"></div>
+        <span class="buffering-text">缓冲中... {{ Math.round(bufferProgress) }}%</span>
+      </div>
+    </div>
+
+    <!-- 错误卡片 -->
     <div v-if="error" class="error-card">
       <div class="error-icon">⚠️</div>
       <div class="error-content">
@@ -64,9 +74,11 @@
       </div>
     </div>
 
+    <!-- 主内容区域 -->
     <div v-if="!isLoading && !error" class="player-content">
+      <!-- 顶部工具栏 -->
       <div class="top-bar">
-        <button class="nav-btn" @click="prevLesson" title="上一课">
+        <button class="nav-btn" @click="prevLesson" :disabled="!hasPrevLesson" title="上一课">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -85,7 +97,7 @@
           <span class="lesson-badge">{{ props.version }}</span>
           <span class="lesson-title">{{ props.name }}</span>
         </div>
-        <button class="nav-btn" @click="nextLesson" title="下一课">
+        <button class="nav-btn" @click="nextLesson" :disabled="!hasNextLesson" title="下一课">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -102,6 +114,21 @@
         </button>
       </div>
 
+      <section class="learning-mode-bar" aria-label="学习模式">
+        <button
+          v-for="mode in learningModes"
+          :key="mode.id"
+          type="button"
+          class="mode-tab"
+          :class="{ active: studyMode === mode.id }"
+          @click="studyMode = mode.id"
+        >
+          <span>{{ mode.label }}</span>
+          <small>{{ mode.description }}</small>
+        </button>
+      </section>
+
+      <!-- 播放器布局 -->
       <div class="player-layout">
         <div class="layout-sidebar">
           <div class="album-panel" @click="handleCoverClick">
@@ -128,15 +155,23 @@
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 </div>
+                <!-- 播放状态指示 -->
+                <div v-if="isPlaying" class="playing-indicator">
+                  <span class="playing-dot"></span>
+                  <span class="playing-dot"></span>
+                  <span class="playing-dot"></span>
+                </div>
               </div>
             </div>
             <div class="album-meta">
               <span class="album-version">{{ props.version }}</span>
+              <span class="album-title">{{ props.name }}</span>
             </div>
           </div>
 
+          <!-- 设置面板 -->
           <div class="settings-panel">
-            <h3 class="panel-title">播放设置</h3>
+            <h3 class="panel-title">训练设置</h3>
             <div class="settings-grid">
               <label class="setting-row">
                 <input type="checkbox" v-model="settings.enableSentenceLoop" />
@@ -155,20 +190,111 @@
                 <input type="checkbox" v-model="settings.continueAfterLoop" />
                 <span>循环后继续播放</span>
               </label>
+              <label class="setting-row">
+                <input type="checkbox" v-model="blindListening" />
+                <span>盲听模式隐藏字幕</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 缓存状态 -->
+          <div class="cache-panel">
+            <h3 class="panel-title">缓存状态</h3>
+            <div class="cache-info">
+              <div class="cache-item">
+                <span class="cache-label">已缓存:</span>
+                <span class="cache-value">{{ formatFileSize(cacheStats.usedSize) }}</span>
+              </div>
+              <div class="cache-item">
+                <span class="cache-label">缓存限制:</span>
+                <span class="cache-value">{{ formatFileSize(cacheStats.maxSize) }}</span>
+              </div>
+              <div class="cache-item">
+                <span class="cache-label">文件数量:</span>
+                <span class="cache-value">{{ cacheStats.fileCount }}</span>
+              </div>
+              <div class="cache-item">
+                <span class="cache-label">资源状态:</span>
+                <span class="cache-value">{{ resourceStatusText }}</span>
+              </div>
+              <button class="clear-cache-btn" @click="clearCache">清空缓存</button>
+            </div>
+          </div>
+
+          <div class="progress-panel">
+            <h3 class="panel-title">学习进度</h3>
+            <div class="study-ring">
+              <strong>{{ lineCompletionPercent }}%</strong>
+              <span>逐句完成</span>
+            </div>
+            <div class="cache-item">
+              <span class="cache-label">跟读最近得分:</span>
+              <span class="cache-value">{{ lastPronunciationScore || '--' }}</span>
+            </div>
+            <div class="cache-item">
+              <span class="cache-label">本地存储:</span>
+              <span class="cache-value">已开启</span>
             </div>
           </div>
         </div>
 
         <div class="layout-main">
+          <!-- 当前歌词面板 -->
           <div class="current-lyric-panel" @click="handleLyricPanelClick">
-            <div class="current-lyric-text">{{ currentLineText }}</div>
-            <div v-if="currentLineTranslation" class="current-lyric-translation">
+            <div class="current-lyric-text">{{ displayCurrentLineText }}</div>
+            <div v-if="currentLineTranslation && !blindListening" class="current-lyric-translation">
               {{ currentLineTranslation }}
             </div>
             <div v-if="!isPlaying" class="tap-hint">点击此处开始播放</div>
           </div>
 
-          <div class="lyrics-scroll" ref="lyricsContainerRef">
+          <section v-if="studyMode === 'shadowing'" class="training-panel" aria-label="跟读练习">
+            <div>
+              <h3>逐句跟读</h3>
+              <p>先听标准发音，再录下自己的朗读，系统会按文本接近度给出即时反馈。</p>
+            </div>
+            <div class="training-actions">
+              <button type="button" @click="playCurrentSentence">播放示范</button>
+              <button type="button" class="primary-action" :class="{ recording: isRecording }" @click="toggleRecording">
+                {{ isRecording ? '结束录音' : '开始跟读' }}
+              </button>
+            </div>
+            <div class="score-strip">
+              <span>识别文本</span>
+              <strong>{{ spokenTranscript || '等待录音结果' }}</strong>
+              <b>{{ lastPronunciationScore || '--' }}</b>
+            </div>
+          </section>
+
+          <section v-else-if="studyMode === 'dictation'" class="training-panel" aria-label="听写训练">
+            <div>
+              <h3>听写训练</h3>
+              <p>隐藏原文，只保留播放控制，提交后即时对比当前句。</p>
+            </div>
+            <textarea v-model="dictationText" placeholder="输入你听到的这一句英文"></textarea>
+            <div class="training-actions">
+              <button type="button" @click="playCurrentSentence">重听当前句</button>
+              <button type="button" class="primary-action" @click="submitDictation">提交听写</button>
+            </div>
+            <div class="score-strip">
+              <span>听写得分</span>
+              <strong>{{ dictationFeedback || '完成后显示差异反馈' }}</strong>
+              <b>{{ dictationScore || '--' }}</b>
+            </div>
+          </section>
+
+          <section v-else-if="studyMode === 'reading'" class="training-panel compact" aria-label="选读学习">
+            <span>选读节奏</span>
+            <strong>按句点读，结合中文释义确认理解，再进入跟读或听写。</strong>
+          </section>
+
+          <section v-else class="training-panel compact" aria-label="重复听读">
+            <span>重复听读</span>
+            <strong>{{ blindListening ? '盲听中，字幕已隐藏' : '可切换变速、单句循环、精听逐句' }}</strong>
+          </section>
+
+          <!-- 歌词滚动区域 -->
+          <div class="lyrics-scroll" ref="lyricsContainerRef" :class="{ obscured: blindListening || studyMode === 'dictation' }">
             <div
               v-for="(line, index) in lrcLines"
               :key="index"
@@ -176,24 +302,164 @@
               :class="{ active: index === currentLineIndex }"
               @click="handleLineClick(index)"
             >
-              <span class="lyric-en">{{ line.textEn }}</span>
-              <span v-if="line.textZh" class="lyric-zh">{{ line.textZh }}</span>
+              <span class="lyric-en">{{ blindListening || studyMode === 'dictation' ? '••••••••••' : line.textEn }}</span>
+              <span v-if="line.textZh && !blindListening && studyMode !== 'dictation'" class="lyric-zh">{{ line.textZh }}</span>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- 底部控制栏 -->
       <div class="bottom-bar">
-        <AudioPlayer />
+        <div class="progress-section">
+          <span class="time-display">{{ formattedCurrentTime }}</span>
+          <div class="progress-bar-container" @click="handleProgressClick">
+            <div class="progress-track">
+              <div class="progress-buffered" :style="{ width: bufferProgress + '%' }"></div>
+              <div class="progress-fill" :style="{ width: progress + '%' }"></div>
+              <div class="progress-thumb" :style="{ left: progress + '%' }"></div>
+            </div>
+          </div>
+          <span class="time-display">{{ formattedDuration }}</span>
+        </div>
+
+        <div class="controls-section">
+          <button class="control-btn" @click="toggleMute" title="静音">
+            <svg
+              v-if="isMuted"
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+              <path
+                d="M9 9v6a3 3 0 0 0 5.12 2.12M15 9.34V15a3 3 0 0 1-5.12 2.12M12 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 6 0V7.5a3 3 0 0 0-3-3z"
+              ></path>
+            </svg>
+            <svg
+              v-else
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+            </svg>
+          </button>
+
+          <button class="control-btn" @click="prevLesson" :disabled="!hasPrevLesson" title="上一课">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="19 20 9 12 19 4 19 20"></polygon>
+              <polygon points="5 20 15 12 5 4 5 20"></polygon>
+            </svg>
+          </button>
+
+          <button class="play-btn" @click="togglePlay">
+            <svg
+              v-if="isPlaying"
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+            <svg
+              v-else
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M8 5v14l11-7z"></path>
+            </svg>
+          </button>
+
+          <button class="control-btn" @click="nextLesson" :disabled="!hasNextLesson" title="下一课">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="5 4 15 12 5 20 5 4"></polygon>
+              <polygon points="19 4 9 12 19 20 19 4"></polygon>
+            </svg>
+          </button>
+
+          <button class="control-btn" @click="showSpeedMenu = !showSpeedMenu" title="播放速度">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <span class="speed-text">{{ playbackRate }}x</span>
+          </button>
+
+          <!-- 音量控制 -->
+          <div class="volume-control">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              :value="volume"
+              @input="handleVolumeChange"
+              class="volume-slider"
+            />
+          </div>
+        </div>
+
+        <!-- 播放速度菜单 -->
+        <div v-if="showSpeedMenu" class="speed-menu">
+          <button
+            v-for="speed in playbackRates"
+            :key="speed"
+            class="speed-option"
+            :class="{ active: playbackRate === speed }"
+            @click="setPlaybackRate(speed)"
+          >
+            {{ speed }}x
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { usePlayer } from 'Composables/usePlayer'
-import AudioPlayer from './AudioPlayer.vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useStreamingPlayer } from 'Composables/useStreamingPlayer'
+import { scoreTextSimilarity, type LearningMode, useLearningProgress } from '@/composables/useLearningProgress'
 
 interface Props {
   name?: string
@@ -205,22 +471,72 @@ const props = withDefaults(defineProps<Props>(), {
   version: 'NCE1'
 })
 
+const playbackRates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+const showSpeedMenu = ref(false)
+const studyMode = ref<LearningMode>('listening')
+const blindListening = ref(false)
+const dictationText = ref('')
+const dictationFeedback = ref('')
+const dictationScore = ref(0)
+const spokenTranscript = ref('')
+const isRecording = ref(false)
+const lastPronunciationScore = ref(0)
+const mediaRecorder = ref<MediaRecorder | null>(null)
+const recognition = ref<any>(null)
+let lastProgressSaveAt = 0
+
+const learningModes: Array<{ id: LearningMode; label: string; description: string }> = [
+  { id: 'listening', label: '重复听读', description: '盲听/精听/变速' },
+  { id: 'shadowing', label: '跟读练习', description: '示范/录音/评分' },
+  { id: 'reading', label: '选读学习', description: '点读/释义/进度' },
+  { id: 'dictation', label: '听写训练', description: '隐藏原文对比' }
+]
+
 const {
+  getProgress,
+  markLineComplete,
+  recordPronunciation,
+  touchLesson,
+  updateLesson
+} = useLearningProgress()
+
+const {
+  currentTime,
+  duration,
   isPlaying,
   isLoading,
+  isBuffering,
+  error,
+  volume,
+  isMuted,
+  playbackRate,
   lrcLines,
   currentLineIndex,
-  error,
-  settings,
+  progress,
+  formattedCurrentTime,
+  formattedDuration,
+  mp3DownloadProgress,
+  lrcDownloadProgress,
+  isOnline,
+  isSlowNetwork,
+  hasNextLesson,
+  hasPrevLesson,
+  bufferProgress,
+  cacheStats,
+  play,
   togglePlay,
+  seek,
+  setVolume,
+  toggleMute,
+  setPlaybackRate,
   loadLesson,
+  retryLoad,
   nextLesson,
   prevLesson,
   playSentence,
-  retryLoad,
-  mp3DownloadProgress,
-  lrcDownloadProgress
-} = usePlayer({
+  clearCache,
+  settings
+} = useStreamingPlayer({
   autoplay: false,
   loop: true,
   volume: 0.7,
@@ -230,7 +546,10 @@ const {
   retryDelay: 2000,
   enableSentenceLoop: true,
   sentenceLoopCount: 3,
-  continueAfterLoop: true
+  continueAfterLoop: true,
+  bufferThreshold: 5,
+  maxBufferSize: 5 * 1024 * 1024,
+  cacheMaxSize: 50 * 1024 * 1024
 })
 
 const currentLineText = computed(() => {
@@ -247,13 +566,52 @@ const currentLineTranslation = computed(() => {
   return ''
 })
 
+const lessonTitle = computed(() => props.name.split('－')[1] || props.name)
+
+const displayCurrentLineText = computed(() => {
+  if (blindListening.value || studyMode.value === 'dictation') {
+    return currentLineIndex.value >= 0 ? '正在听写当前句' : currentLineText.value
+  }
+  return currentLineText.value
+})
+
+const currentProgress = computed(() => getProgress(props.version, props.name))
+
+const lineCompletionPercent = computed(() => {
+  if (!lrcLines.value.length) return 0
+  const completed = currentProgress.value?.completedLines.length || 0
+  return Math.min(100, Math.round((completed / lrcLines.value.length) * 100))
+})
+
+const resourceStatusText = computed(() => {
+  if (mp3DownloadProgress.value.status === 'completed' && lrcDownloadProgress.value.status === 'completed') {
+    return '可离线学习'
+  }
+  if (mp3DownloadProgress.value.status === 'downloading') {
+    return `边播边缓存 ${mp3DownloadProgress.value.progress}%`
+  }
+  if (!isOnline.value) {
+    return '离线，仅可用已缓存资源'
+  }
+  return '等待加载'
+})
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
 const handleLineClick = (index: number) => {
   playSentence(index)
+  markLineComplete(props.version, props.name, lessonTitle.value, index)
 }
 
 const handleLyricPanelClick = () => {
   if (!isPlaying.value) {
-    togglePlay()
+    play(0)
   }
 }
 
@@ -261,14 +619,213 @@ const handleCoverClick = () => {
   togglePlay()
 }
 
+const handleProgressClick = (e: MouseEvent) => {
+  const target = e.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  const percent = x / rect.width
+  seek(percent * duration.value)
+}
+
+const handleVolumeChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  setVolume(parseFloat(target.value))
+}
+
+const playCurrentSentence = () => {
+  const index = currentLineIndex.value >= 0 ? currentLineIndex.value : 0
+  playSentence(index)
+}
+
+const finishRecordingScore = (transcript: string) => {
+  const reference = currentLineText.value
+  const score = scoreTextSimilarity(reference, transcript)
+  spokenTranscript.value = transcript || '未识别到清晰语音'
+  lastPronunciationScore.value = score
+  recordPronunciation(props.version, props.name, lessonTitle.value, score)
+  if (currentLineIndex.value >= 0 && score >= 60) {
+    markLineComplete(props.version, props.name, lessonTitle.value, currentLineIndex.value)
+  }
+}
+
+const stopRecording = () => {
+  isRecording.value = false
+  mediaRecorder.value?.stop()
+  recognition.value?.stop?.()
+}
+
+const toggleRecording = async () => {
+  if (isRecording.value) {
+    stopRecording()
+    return
+  }
+
+  spokenTranscript.value = ''
+  playCurrentSentence()
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder.value = new MediaRecorder(stream)
+    mediaRecorder.value.onstop = () => {
+      stream.getTracks().forEach(track => track.stop())
+      if (!spokenTranscript.value) {
+        finishRecordingScore('')
+      }
+    }
+
+    const RecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (RecognitionCtor) {
+      const speechRecognition = new RecognitionCtor()
+      speechRecognition.lang = 'en-US'
+      speechRecognition.interimResults = false
+      speechRecognition.maxAlternatives = 1
+      speechRecognition.onresult = (event: any) => {
+        const transcript = event.results?.[0]?.[0]?.transcript || ''
+        finishRecordingScore(transcript)
+      }
+      speechRecognition.onerror = () => finishRecordingScore('')
+      recognition.value = speechRecognition
+      speechRecognition.start()
+    }
+
+    mediaRecorder.value.start()
+    isRecording.value = true
+  } catch (err) {
+    spokenTranscript.value = err instanceof Error ? err.message : '无法启动麦克风'
+    isRecording.value = false
+  }
+}
+
+const submitDictation = () => {
+  const score = scoreTextSimilarity(currentLineText.value, dictationText.value)
+  dictationScore.value = score
+  dictationFeedback.value = score >= 85 ? '非常接近原句' : score >= 60 ? '核心意思正确，注意拼写和冠词' : '建议先精听，再逐词补全'
+  updateLesson(props.version, props.name, lessonTitle.value, {
+    dictationAttempts: (currentProgress.value?.dictationAttempts || 0) + 1,
+    mode: 'dictation'
+  })
+  if (currentLineIndex.value >= 0 && score >= 70) {
+    markLineComplete(props.version, props.name, lessonTitle.value, currentLineIndex.value)
+  }
+}
+
 watch(
   () => props.name,
   newName => {
     if (newName) {
+      touchLesson(props.version, newName, lessonTitle.value)
       loadLesson(newName, props.version)
     }
   }
 )
+
+watch(studyMode, mode => {
+  updateLesson(props.version, props.name, lessonTitle.value, { mode })
+  blindListening.value = mode === 'dictation' ? true : blindListening.value
+})
+
+watch(currentLineIndex, index => {
+  if (index >= 0 && studyMode.value === 'reading') {
+    markLineComplete(props.version, props.name, lessonTitle.value, index)
+  }
+})
+
+watch(currentTime, time => {
+  const now = Date.now()
+  if (now - lastProgressSaveAt < 5000) return
+  lastProgressSaveAt = now
+  updateLesson(props.version, props.name, lessonTitle.value, {
+    lastPosition: time,
+    totalStudySeconds: (currentProgress.value?.totalStudySeconds || 0) + 5
+  })
+})
+
+watch(mp3DownloadProgress, progressState => {
+  if (progressState.status === 'completed') {
+    updateLesson(props.version, props.name, lessonTitle.value, { cached: true })
+  }
+}, { deep: true })
+
+watch(showSpeedMenu, newVal => {
+  if (newVal) {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.speed-menu') && !target.closest('.control-btn:last-child')) {
+        showSpeedMenu.value = false
+        document.removeEventListener('click', handleClickOutside)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+  }
+})
+
+const handleKeydown = (e: KeyboardEvent) => {
+  const target = e.target as HTMLElement
+  const isInput = target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.isContentEditable
+  
+  if (isInput) return
+
+  switch (e.code) {
+    case 'Space':
+      e.preventDefault()
+      togglePlay()
+      break
+    case 'ArrowLeft':
+      e.preventDefault()
+      if (hasPrevLesson.value) {
+        prevLesson()
+      }
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      if (hasNextLesson.value) {
+        nextLesson()
+      }
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      setVolume(Math.min(1, volume.value + 0.1))
+      break
+    case 'ArrowDown':
+      e.preventDefault()
+      setVolume(Math.max(0, volume.value - 0.1))
+      break
+    case 'KeyM':
+      e.preventDefault()
+      toggleMute()
+      break
+    case 'KeyR':
+      e.preventDefault()
+      const currentRateIndex = playbackRates.indexOf(playbackRate.value)
+      const nextRateIndex = (currentRateIndex + 1) % playbackRates.length
+      setPlaybackRate(playbackRates[nextRateIndex])
+      break
+    case 'Home':
+      e.preventDefault()
+      seek(0)
+      break
+    case 'End':
+      e.preventDefault()
+      seek(duration.value)
+      break
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+  if (props.name) {
+    touchLesson(props.version, props.name, lessonTitle.value)
+    loadLesson(props.name, props.version)
+  }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  stopRecording()
+  updateLesson(props.version, props.name, lessonTitle.value, {
+    lastPosition: currentTime.value
+  })
+})
 </script>
 
 <style>
@@ -285,9 +842,10 @@ watch(
 }
 
 .player-container {
+  position: relative;
   container-type: inline-size;
   container-name: player;
-  min-height: 100vh;
+  min-height: 100%;
   background: var(--player-bg);
   color: var(--player-text);
   box-sizing: border-box;
@@ -316,7 +874,7 @@ watch(
 
 /* ===== 加载状态 ===== */
 .loading-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.9);
   display: flex;
@@ -344,17 +902,6 @@ watch(
   border-top: 3px solid var(--player-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-}
-
-.spinner-dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: clamp(6px, 1vw, 8px);
-  height: clamp(6px, 1vw, 8px);
-  background: var(--player-accent);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
 }
 
 .loading-text h3 {
@@ -396,6 +943,7 @@ watch(
 }
 
 .progress-bar {
+  position: relative;
   height: 6px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
@@ -429,6 +977,39 @@ watch(
   margin-top: 8px;
   font-size: 0.75rem;
   color: #d97706;
+}
+
+/* ===== 缓冲状态 ===== */
+.buffering-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  backdrop-filter: blur(5px);
+}
+
+.buffering-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.buffering-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top: 3px solid var(--player-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.buffering-text {
+  font-size: 1rem;
+  color: var(--player-text-secondary);
 }
 
 /* ===== 错误卡片 ===== */
@@ -487,6 +1068,47 @@ watch(
   z-index: 50;
 }
 
+.learning-mode-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px clamp(12px, 3vw, 24px);
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid var(--player-border);
+}
+
+.mode-tab {
+  min-height: 58px;
+  border: 1px solid var(--player-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--player-text-secondary);
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    color 0.2s;
+
+  span {
+    font-weight: 700;
+    color: var(--player-text);
+  }
+
+  small {
+    color: inherit;
+    font-size: 0.72rem;
+  }
+
+  &.active {
+    border-color: var(--player-accent);
+    background: rgba(212, 175, 55, 0.16);
+    color: var(--player-accent);
+  }
+}
+
 .nav-btn {
   width: clamp(36px, 6vw, 40px);
   height: clamp(36px, 6vw, 40px);
@@ -501,11 +1123,15 @@ watch(
   transition: all 0.2s;
   flex-shrink: 0;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
   }
-  &:active {
+  &:active:not(:disabled) {
     transform: scale(0.95);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 }
 
@@ -542,6 +1168,7 @@ watch(
   flex-direction: column;
   gap: clamp(12px, 2vw, 20px);
   padding: clamp(12px, 2vw, 20px);
+  min-height: 0;
 }
 
 .layout-sidebar {
@@ -610,8 +1237,39 @@ watch(
   opacity: 1;
 }
 
+/* 播放状态指示 */
+.playing-indicator {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+}
+
+.playing-dot {
+  width: 4px;
+  height: 12px;
+  background: var(--player-accent);
+  border-radius: 2px;
+  animation: sound-wave 0.8s ease-in-out infinite;
+
+  &:nth-child(1) {
+    animation-delay: 0s;
+  }
+  &:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  &:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
+
 .album-meta {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .album-version {
@@ -622,8 +1280,21 @@ watch(
   border-radius: 12px;
 }
 
+.album-title {
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
 /* ===== 设置面板 ===== */
 .settings-panel {
+  background: var(--player-surface);
+  border-radius: clamp(12px, 2vw, 16px);
+  padding: clamp(14px, 2.5vw, 20px);
+}
+
+.cache-panel,
+.progress-panel {
   background: var(--player-surface);
   border-radius: clamp(12px, 2vw, 16px);
   padding: clamp(14px, 2.5vw, 20px);
@@ -668,6 +1339,63 @@ watch(
   cursor: pointer;
 }
 
+.cache-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cache-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(0.8rem, 1.3vw, 0.9rem);
+}
+
+.cache-label {
+  color: var(--player-text-secondary);
+}
+
+.cache-value {
+  font-weight: 500;
+}
+
+.clear-cache-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: clamp(0.8rem, 1.3vw, 0.9rem);
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.3);
+  }
+}
+
+.study-ring {
+  aspect-ratio: 1;
+  width: min(130px, 55%);
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 8px solid rgba(212, 175, 55, 0.22);
+  display: grid;
+  place-content: center;
+  text-align: center;
+
+  strong {
+    font-size: 1.6rem;
+    line-height: 1;
+  }
+
+  span {
+    color: var(--player-text-secondary);
+    font-size: 0.75rem;
+  }
+}
+
 /* ===== 主区域 ===== */
 .layout-main {
   flex: 1;
@@ -704,6 +1432,100 @@ watch(
   font-style: italic;
 }
 
+.training-panel {
+  background: var(--player-surface);
+  border: 1px solid var(--player-border);
+  border-radius: 8px;
+  padding: clamp(14px, 2vw, 18px);
+  display: grid;
+  gap: 12px;
+
+  h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+  }
+
+  p {
+    margin: 0;
+    color: var(--player-text-secondary);
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 86px;
+    resize: vertical;
+    border: 1px solid var(--player-border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: var(--player-text);
+    background: rgba(0, 0, 0, 0.22);
+    font: inherit;
+  }
+
+  &.compact {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+
+    span {
+      color: var(--player-accent);
+      font-weight: 700;
+    }
+  }
+}
+
+.training-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+
+  button {
+    min-height: 40px;
+    border: 1px solid var(--player-border);
+    border-radius: 8px;
+    padding: 0 0.9rem;
+    color: var(--player-text);
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+  }
+
+  .primary-action {
+    border-color: var(--player-primary-light);
+    background: var(--player-primary);
+  }
+
+  .recording {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.24);
+  }
+}
+
+.score-strip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+
+  span {
+    color: var(--player-text-secondary);
+    font-size: 0.78rem;
+  }
+
+  strong {
+    min-width: 0;
+    color: var(--player-text);
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+
+  b {
+    color: var(--player-accent);
+    font-size: 1.2rem;
+  }
+}
+
 .tap-hint {
   margin-top: clamp(8px, 1.5vw, 12px);
   font-size: clamp(0.8rem, 1.5vw, 0.9rem);
@@ -716,7 +1538,10 @@ watch(
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  /* padding: 0 clamp(8px, 1.5vw, 12px); */
+
+  &.obscured .lyric-line {
+    min-height: 52px;
+  }
 }
 
 .lyric-line {
@@ -763,12 +1588,209 @@ watch(
   bottom: 0;
 }
 
+.progress-section {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.5vw, 12px);
+  margin-bottom: clamp(10px, 1.5vw, 14px);
+}
+
+.time-display {
+  font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+  color: var(--player-text-secondary);
+  min-width: 40px;
+  text-align: center;
+}
+
+.progress-bar-container {
+  flex: 1;
+  cursor: pointer;
+  height: 6px;
+}
+
+.progress-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.progress-buffered {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--player-primary), var(--player-accent));
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.progress-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.progress-bar-container:hover .progress-thumb {
+  opacity: 1;
+}
+
+.controls-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 16px);
+}
+
+.control-btn {
+  width: clamp(36px, 5vw, 40px);
+  height: clamp(36px, 5vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--player-text);
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 4px;
+
+  &:hover:not(:disabled) {
+    color: var(--player-accent);
+  }
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.speed-text {
+  font-size: clamp(0.7rem, 1.2vw, 0.8rem);
+}
+
+.play-btn {
+  width: clamp(50px, 8vw, 60px);
+  height: clamp(50px, 8vw, 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--player-primary);
+  border-radius: 50%;
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(44, 85, 48, 0.4);
+
+  &:hover {
+    background: var(--player-primary-light);
+    transform: scale(1.05);
+  }
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.volume-control {
+  width: clamp(60px, 12vw, 80px);
+}
+
+.volume-slider {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* 播放速度菜单 */
+.speed-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.speed-option {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  color: var(--player-text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--player-text);
+  }
+
+  &.active {
+    background: var(--player-primary);
+    color: white;
+  }
+}
+
 /* ===== 容器查询 - 响应式布局 ===== */
 @container player (min-width: 600px) {
   .player-layout {
     display: grid;
     grid-template-columns: clamp(220px, 30%, 280px) 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr;
     gap: clamp(16px, 2.5vw, 24px);
   }
 
@@ -780,6 +1802,24 @@ watch(
   .layout-main {
     grid-row: 1;
     grid-column: 2;
+  }
+
+  .bottom-bar {
+    position: relative;
+  }
+}
+
+@container player (max-width: 560px) {
+  .learning-mode-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .score-strip {
+    grid-template-columns: 1fr auto;
+
+    span {
+      grid-column: 1 / -1;
+    }
   }
 }
 
@@ -822,6 +1862,16 @@ watch(
   }
   50% {
     opacity: 1;
+  }
+}
+
+@keyframes sound-wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
   }
 }
 </style>

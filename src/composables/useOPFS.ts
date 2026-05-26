@@ -1,9 +1,15 @@
 import { ref, onUnmounted } from 'vue'
-import FileWorker from '../workers/file-worker?worker'
+
+export interface CachedFileInfo {
+  name: string
+  size: number
+  lastAccessed: number
+}
 
 export function useOPFS() {
   const worker = ref<Worker | null>(null)
   const pending = new Map<string, (value: any) => void>()
+  const pendingRejects = new Map<string, (error: Error) => void>()
   let requestId = 0
 
   function generateId(): string {
@@ -12,8 +18,11 @@ export function useOPFS() {
 
   function getWorker(): Worker {
     if (!worker.value) {
-      worker.value = new FileWorker()
-      worker.value.onmessage = (e: MessageEvent) => {
+      const workerUrl = new URL('../workers/file-worker.ts', import.meta.url)
+      worker.value = new Worker(workerUrl, { type: 'module' })
+      
+      const currentWorker = worker.value
+      currentWorker.onmessage = (e: MessageEvent) => {
         const { type, payload } = e.data
         const requestId = payload.requestId
         if (type === 'cache_complete' || type === 'delete_complete') {
@@ -48,15 +57,42 @@ export function useOPFS() {
             pending.delete(requestId)
           }
         }
-        else if (type === 'error') {
-          for (const [, reject] of pending) {
-            reject(new Error(payload.message))
+        else if (type === 'list_files_result') {
+          const resolve = pending.get(requestId)
+          if (resolve) {
+            resolve(payload.files)
+            pending.delete(requestId)
           }
-          pending.clear()
+        }
+        else if (type === 'clear_cache_complete') {
+          const resolve = pending.get(requestId)
+          if (resolve) {
+            resolve(payload.deletedFiles)
+            pending.delete(requestId)
+          }
+        }
+        else if (type === 'error') {
+          console.error('[useOPFS] Worker error:', payload.message)
+          const reqId = payload.requestId
+          const reject = pendingRejects.get(reqId)
+          if (reject) {
+            reject(new Error(payload.message))
+            pendingRejects.delete(reqId)
+          }
+          // 也尝试调用 resolve 以防 reject 不存在
+          const resolve = pending.get(reqId)
+          if (resolve) {
+            resolve(null)
+            pending.delete(reqId)
+          }
         }
       }
+
+      currentWorker.onerror = (err) => {
+        console.error('[useOPFS] Worker error:', err)
+      }
     }
-    return worker.value
+    return worker.value as Worker
   }
 
   function sendRequest(type: string, payload: any): Promise<any> {
@@ -64,11 +100,13 @@ export function useOPFS() {
       const w = getWorker()
       const id = generateId()
       pending.set(id, resolve)
+      pendingRejects.set(id, reject)
       const requestPayload = { ...payload, requestId: id }
       
       w.onerror = (err) => {
         reject(err)
         pending.delete(id)
+        pendingRejects.delete(id)
       }
       
       if (type === 'cache_file') {
@@ -95,10 +133,19 @@ export function useOPFS() {
     await sendRequest('delete_file', { path })
   }
 
+  async function listFiles(): Promise<CachedFileInfo[]> {
+    return sendRequest('list_files', {})
+  }
+
+  async function clearCache(): Promise<string[]> {
+    return sendRequest('clear_cache', {})
+  }
+
   onUnmounted(() => {
     worker.value?.terminate()
     pending.clear()
+    pendingRejects.clear()
   })
 
-  return { cacheFile, readFile, fileExists, deleteFile }
+  return { cacheFile, readFile, fileExists, deleteFile, listFiles, clearCache }
 }

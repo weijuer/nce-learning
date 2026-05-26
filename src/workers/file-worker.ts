@@ -1,5 +1,11 @@
 const ctx = self as unknown as Worker;
 
+interface FileInfo {
+  name: string;
+  size: number;
+  lastAccessed: number;
+}
+
 ctx.onmessage = async (e: MessageEvent) => {
   const { type, payload } = e.data;
 
@@ -34,10 +40,44 @@ ctx.onmessage = async (e: MessageEvent) => {
     } else if (type === "delete_file") {
       const { path, requestId } = payload;
       const root = await navigator.storage.getDirectory();
-      await root.removeEntry(path);
+      try {
+        await root.removeEntry(path);
+      } catch {
+        /* 文件不存在，忽略错误 */
+      }
       ctx.postMessage({ type: "delete_complete", payload: { path, requestId } });
+    } else if (type === "list_files") {
+      const { requestId } = payload;
+      const root = await navigator.storage.getDirectory();
+      const files: FileInfo[] = [];
+      for await (const [name, handle] of root.entries()) {
+        if (handle.kind === "file") {
+          const file = await handle.getFile();
+          files.push({
+            name,
+            size: file.size,
+            lastAccessed: file.lastModified
+          });
+        }
+      }
+      ctx.postMessage({ type: "list_files_result", payload: { files, requestId } });
+    } else if (type === "clear_cache") {
+      const { requestId } = payload;
+      const root = await navigator.storage.getDirectory();
+      const deletedFiles: string[] = [];
+      for await (const [name, handle] of root.entries()) {
+        if (handle.kind === "file") {
+          try {
+            await root.removeEntry(name);
+            deletedFiles.push(name);
+          } catch {
+            /* 删除失败，继续处理其他文件 */
+          }
+        }
+      }
+      ctx.postMessage({ type: "clear_cache_complete", payload: { deletedFiles, requestId } });
     }
   } catch (error: any) {
-    ctx.postMessage({ type: "error", payload: { message: error.message } });
+    ctx.postMessage({ type: "error", payload: { message: error.message, requestId: payload?.requestId } });
   }
 };

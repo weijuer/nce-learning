@@ -1,10 +1,11 @@
 <script name="book" setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { WTabs, WTab, WDrawer } from '@/components/layouts'
 import { Player, MiniPlayer } from 'Widgets'
 
 import { NCE_JSON } from '@/utils/nce-data'
 import { usePlayer } from 'Composables/usePlayer'
+import { useLearningProgress } from '@/composables/useLearningProgress'
 
 const books = ref(NCE_JSON || {})
 
@@ -18,6 +19,23 @@ const state = reactive({
 
 const showMiniPlayer = ref(false)
 const hasPlayHistory = ref(false)
+const selectedLevel = ref('all')
+const selectedTheme = ref('all')
+const searchText = ref('')
+
+const levelMeta = {
+  NCE1: { label: '入门', description: '基础句型与日常表达' },
+  NCE2: { label: '进阶', description: '核心语法与短篇叙事' },
+  NCE3: { label: '强化', description: '复杂表达与精读能力' },
+  NCE4: { label: '高级', description: '学术阅读与思想表达' }
+} as const
+
+const themeRules = [
+  { id: 'daily', label: '日常沟通', pattern: /shirt|coffee|holiday|weekend|doctor|kitchen|weather|supper|shopping|passport|teacher|breakfast/i },
+  { id: 'story', label: '故事叙事', pattern: /story|dream|ghost|alibi|escape|mine|murder|puma|titanic|island|gangster/i },
+  { id: 'culture', label: '文化社会', pattern: /education|industry|banks|culture|government|sporting|old|youth|city|press/i },
+  { id: 'science', label: '科学自然', pattern: /volcanoes|hubble|sound|space|noise|river|bats|fossil|snake|earth|electric|bridge/i }
+]
 
 const {
   isPlaying,
@@ -25,9 +43,78 @@ const {
   loadLesson
 } = usePlayer()
 
+const {
+  averagePronunciationScore,
+  completedLessonCount,
+  getProgress,
+  settings,
+  todayStudySeconds,
+  touchLesson,
+  updateSettings
+} = useLearningProgress()
+
 const getLessonTitle = (fileName: string) => {
   return 'Lesson ' + fileName.split('－')[0]
 }
+
+const getTheme = (lessonName: string) => {
+  return themeRules.find(rule => rule.pattern.test(lessonName))?.id || 'daily'
+}
+
+const getThemeLabel = (themeId: string) => {
+  return themeRules.find(rule => rule.id === themeId)?.label || '综合'
+}
+
+const flattenedLessons = computed(() => {
+  return Object.entries(books.value).flatMap(([version, lessons]) =>
+    lessons.map(lesson => {
+      const progress = getProgress(version, lesson.fileName)
+      const theme = getTheme(`${lesson.fileName} ${lesson.name}`)
+      const completedLines = progress?.completedLines.length || 0
+      const score = progress?.pronunciationScores.at(-1) || 0
+
+      return {
+        ...lesson,
+        version,
+        title: getLessonTitle(lesson.fileName),
+        level: levelMeta[version as keyof typeof levelMeta]?.label || version,
+        levelDescription: levelMeta[version as keyof typeof levelMeta]?.description || '',
+        theme,
+        progress,
+        completion: Math.min(100, Math.round((completedLines / 8) * 100)),
+        score
+      }
+    })
+  )
+})
+
+const filteredLessons = computed(() => {
+  const keyword = searchText.value.trim().toLowerCase()
+  return flattenedLessons.value.filter(lesson => {
+    const matchesLevel = selectedLevel.value === 'all' || lesson.version === selectedLevel.value
+    const matchesTheme = selectedTheme.value === 'all' || lesson.theme === selectedTheme.value
+    const matchesSearch = !keyword || `${lesson.fileName} ${lesson.name}`.toLowerCase().includes(keyword)
+    return matchesLevel && matchesTheme && matchesSearch
+  })
+})
+
+const groupedLessons = computed(() => {
+  return filteredLessons.value.reduce<Record<string, typeof filteredLessons.value>>((groups, lesson) => {
+    if (!groups[lesson.version]) groups[lesson.version] = []
+    groups[lesson.version].push(lesson)
+    return groups
+  }, {})
+})
+
+const dailyGoalPercent = computed(() => {
+  const goalSeconds = settings.value.dailyGoalMinutes * 60
+  return Math.min(100, Math.round((todayStudySeconds.value / goalSeconds) * 100))
+})
+
+const resumeLesson = computed(() => {
+  return flattenedLessons.value.find(lesson => lesson.progress?.lastPosition || lesson.progress?.completedLines.length)
+    || flattenedLessons.value[0]
+})
 
 const goLesson = (name: string, version: string | number) => {
   state.isOpen = true
@@ -35,6 +122,7 @@ const goLesson = (name: string, version: string | number) => {
   state.description = name
   state.name = name
   state.version = version as string
+  touchLesson(version as string, name, state.description)
   
   loadLesson(name, version as string)
 }
@@ -55,32 +143,104 @@ watch(isPlaying, (playing) => {
     showMiniPlayer.value = false
   }
 })
+
+watch(selectedLevel, level => {
+  updateSettings({ preferredLevel: level })
+})
+
+watch(selectedTheme, theme => {
+  updateSettings({ preferredTheme: theme })
+})
 </script>
 
 <template>
   <div class="book">
-    <header class="page-hero">
-      <h1>NCE Learning</h1>
-      <p>Simple · Efficient · Focus</p>
+    <header class="learning-hero">
+      <div>
+        <p class="eyebrow">Learning path</p>
+        <h1>今天从可理解输入开始</h1>
+        <p>按难度、主题和最近进度选择课程，听读、跟读、听写在同一个学习流里完成。</p>
+      </div>
+      <button
+        v-if="resumeLesson"
+        type="button"
+        class="resume-btn"
+        @click="goLesson(resumeLesson.fileName, resumeLesson.version)"
+      >
+        继续 {{ resumeLesson.title }}
+      </button>
     </header>
+
+    <section class="learning-dashboard" aria-label="学习概览">
+      <div class="metric">
+        <span class="metric-label">今日目标</span>
+        <strong>{{ Math.round(todayStudySeconds / 60) }}/{{ settings.dailyGoalMinutes }} min</strong>
+        <div class="metric-bar"><span :style="{ width: dailyGoalPercent + '%' }"></span></div>
+      </div>
+      <div class="metric">
+        <span class="metric-label">完成课程</span>
+        <strong>{{ completedLessonCount }}</strong>
+        <small>本地优先记录</small>
+      </div>
+      <div class="metric">
+        <span class="metric-label">跟读均分</span>
+        <strong>{{ averagePronunciationScore || '--' }}</strong>
+        <small>{{ settings.syncEnabled ? '云同步已开启' : '离线可用，待同步' }}</small>
+      </div>
+    </section>
+
+    <section class="library-toolbar" aria-label="内容筛选">
+      <input v-model="searchText" type="search" placeholder="搜索课程标题或编号" />
+      <select v-model="selectedLevel" aria-label="难度筛选">
+        <option value="all">全部难度</option>
+        <option v-for="(_, version) in books" :key="version" :value="version">
+          {{ version }} · {{ levelMeta[version as keyof typeof levelMeta]?.label }}
+        </option>
+      </select>
+      <select v-model="selectedTheme" aria-label="主题筛选">
+        <option value="all">全部主题</option>
+        <option v-for="theme in themeRules" :key="theme.id" :value="theme.id">{{ theme.label }}</option>
+      </select>
+      <label class="sync-toggle">
+        <input
+          type="checkbox"
+          :checked="settings.syncEnabled"
+          @change="updateSettings({ syncEnabled: ($event.target as HTMLInputElement).checked })"
+        />
+        <span>多设备同步</span>
+      </label>
+    </section>
 
     <w-tabs variant="pills">
       <w-tab
-        v-for="(folder, folderName) in books"
+        v-for="(_, folderName) in groupedLessons"
         :key="folderName"
         :title="folderName"
         :name="folderName"
       >
         <div class="lesssons">
           <div
-            v-for="(course, courseName) in folder"
-            :key="courseName"
-            @click="goLesson(course.fileName, folderName)"
+            v-for="course in groupedLessons[folderName]"
+            :key="course.fileName"
+            @click="goLesson(course.fileName, course.version)"
             class="lesson"
           >
             <div class="lesson-content">
-              <div class="lesson-title">{{ getLessonTitle(course.fileName) }}</div>
+              <div class="lesson-topline">
+                <span class="lesson-title">{{ course.title }}</span>
+                <span class="lesson-chip">{{ course.level }}</span>
+              </div>
               <div class="lesson-name">{{ course.name }}</div>
+              <p>{{ course.levelDescription }}</p>
+              <div class="lesson-meta">
+                <span>{{ getThemeLabel(course.theme) }}</span>
+                <span v-if="course.progress?.cached">已缓存</span>
+                <span v-else>可预下载</span>
+                <span v-if="course.score">跟读 {{ course.score }}</span>
+              </div>
+              <div class="lesson-progress" aria-hidden="true">
+                <span :style="{ width: course.completion + '%' }"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -109,25 +269,133 @@ watch(isPlaying, (playing) => {
 
 <style>
 .book {
-  padding: 2rem;
+  padding: clamp(1rem, 3vw, 2rem);
   padding-bottom: calc(2rem + 70px);
   display: flex;
   flex-direction: column;
+  gap: 1rem;
+
+  .learning-hero {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: clamp(0.5rem, 2vw, 1rem);
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 4vw, 3.5rem);
+      line-height: 1.05;
+    }
+
+    p {
+      max-width: 680px;
+      color: var(--color-text-dim);
+    }
+  }
+
+  .eyebrow {
+    margin: 0 0 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    font-size: 0.75rem;
+    color: var(--color-secondary);
+    font-weight: 700;
+  }
+
+  .resume-btn {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: var(--color-text);
+    background: var(--color-surface);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .learning-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .metric {
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    display: grid;
+    gap: 0.35rem;
+
+    strong {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+
+    small,
+    .metric-label {
+      color: var(--color-text-dim);
+    }
+  }
+
+  .metric-bar,
+  .lesson-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-border) 70%, transparent);
+    overflow: hidden;
+
+    span {
+      display: block;
+      height: 100%;
+      background: #2f7d62;
+    }
+  }
+
+  .library-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(140px, 180px)) auto;
+    gap: 0.75rem;
+    align-items: center;
+
+    input,
+    select {
+      min-height: 42px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 0 0.8rem;
+      color: var(--color-text);
+      background: var(--color-surface);
+    }
+  }
+
+  .sync-toggle {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline: 0.8rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text-dim);
+    background: var(--color-surface);
+  }
 
   .lesssons {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    grid-gap: clamp(1rem, 2vw, 24px);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: clamp(0.75rem, 2vw, 1rem);
     justify-content: center;
 
     .lesson {
-      padding: clamp(1rem, 2vmax, 2.5rem) 1rem;
+      min-height: 170px;
+      padding: 1rem;
       position: relative;
       display: flex;
       justify-content: space-between;
       flex-direction: column;
       background-color: var(--surface);
-      border-radius: 10px;
+      border-radius: 8px;
       border: 1px solid var(--color-border);
       transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
       overflow: hidden;
@@ -139,9 +407,31 @@ watch(isPlaying, (playing) => {
         border-color: var(--color-border);
       }
 
+      .lesson-content {
+        display: grid;
+        gap: 0.55rem;
+      }
+
+      .lesson-topline,
+      .lesson-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
       .lesson-title {
         font-size: 0.85rem;
         color: var(--secondary-text);
+      }
+
+      .lesson-chip,
+      .lesson-meta span {
+        border-radius: 999px;
+        padding: 0.15rem 0.45rem;
+        background: color-mix(in srgb, var(--color-border) 65%, transparent);
+        color: var(--color-text-dim);
+        font-size: 0.72rem;
       }
 
       .lesson-name {
@@ -149,6 +439,35 @@ watch(isPlaying, (playing) => {
         font-weight: 600;
         color: var(--text);
       }
+
+      p {
+        margin: 0;
+        min-height: 2.8em;
+        color: var(--color-text-dim);
+        font-size: 0.85rem;
+      }
+
+      .lesson-meta {
+        justify-content: start;
+        flex-wrap: wrap;
+      }
+    }
+  }
+}
+
+@media (max-width: 760px) {
+  .book {
+    .learning-hero {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    .library-toolbar {
+      grid-template-columns: 1fr;
+    }
+
+    .resume-btn {
+      width: 100%;
     }
   }
 }
