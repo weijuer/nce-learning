@@ -44,18 +44,23 @@ export const getTheme = (lessonName: string, themeRules: LessonThemeRule[], fall
   return themeRules.find(rule => rule.pattern.test(lessonName))?.id || fallbackTheme
 }
 
+export interface LessonLibraryResult<TLesson> {
+  lessons: TLesson[]
+  groups: GroupedLessons<TLesson>
+  hasResults: boolean
+}
+
 export function buildLessonGroups<TProgress extends LessonProgressSummary>(
   books: Record<string, RawLesson[]>,
   options: {
-    selectedLevel: string
-    selectedTheme: string
     searchText: string
     levelMeta: Record<string, { label: string; description: string }>
     themeRules: LessonThemeRule[]
     getProgress?: LessonProgressGetter<TProgress>
   }
-) {
+): LessonLibraryResult<(typeof lessons)[number]> {
   const keyword = options.searchText.trim().toLowerCase()
+  const seen = new Set<string>()
   const lessons = Object.entries(books)
     .flatMap(([version, rawLessons]) => {
       if (!Array.isArray(rawLessons)) return []
@@ -82,19 +87,32 @@ export function buildLessonGroups<TProgress extends LessonProgressSummary>(
         })
     })
     .filter(lesson => {
-      const matchesLevel = options.selectedLevel === 'all' || lesson.version === options.selectedLevel
-      const matchesTheme = options.selectedTheme === 'all' || lesson.theme === options.selectedTheme
+      const key = `${lesson.version}/${lesson.fileName}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .filter(lesson => {
+      if (!keyword) return true
       const searchableText = `${lesson.fileName} ${lesson.name} ${lesson.title} ${lesson.level}`.toLowerCase()
-      const matchesSearch = !keyword || searchableText.includes(keyword)
-      return matchesLevel && matchesTheme && matchesSearch
+      return searchableText.includes(keyword)
     })
     .sort((a, b) => a.version.localeCompare(b.version) || getLessonNumber(a.fileName) - getLessonNumber(b.fileName))
 
+  // 按版本分组，确保所有版本都存在
   const groups = lessons.reduce<GroupedLessons<(typeof lessons)[number]>>((currentGroups, lesson) => {
     currentGroups[lesson.version] ??= []
     currentGroups[lesson.version].push(lesson)
     return currentGroups
   }, {})
 
-  return { lessons, groups }
+  // 补充没有课程的版本，确保所有级别都显示
+  const allVersions = Object.keys(options.levelMeta)
+  for (const version of allVersions) {
+    if (!groups[version]) {
+      groups[version] = []
+    }
+  }
+
+  return { lessons, groups, hasResults: lessons.length > 0 }
 }

@@ -32,6 +32,7 @@ export interface TabsProvider {
   activeIndex: Ref<number>
   tabs: Ref<Tab[]>
   registerTab: (tab: Tab) => void
+  unregisterTab: (tabName: string) => void
 }
 
 const activeIndex = ref(props.modelValue)
@@ -107,6 +108,12 @@ provide('w-tabs', {
   tabs,
   registerTab: (tab: Tab) => {
     tabs.value.push(tab)
+  },
+  unregisterTab: (tabName: string) => {
+    const index = tabs.value.findIndex(tab => tab.name === tabName)
+    if (index !== -1) {
+      tabs.value.splice(index, 1)
+    }
   }
 })
 

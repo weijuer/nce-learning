@@ -2,6 +2,10 @@
 import { computed } from 'vue'
 import { Player } from 'Widgets'
 
+defineOptions({
+  name: 'Lesson'
+})
+
 const props = defineProps({
   name: {
     type: String,

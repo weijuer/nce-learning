@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { usePlayer } from 'Composables/usePlayer'
+import { useStreamingPlayer } from 'Composables/useStreamingPlayer'
 
 const emit = defineEmits<{
   (e: 'open-drawer'): void
@@ -64,7 +64,7 @@ const {
   formattedCurrentTime,
   formattedDuration,
   togglePlay
-} = usePlayer()
+} = useStreamingPlayer()
 
 const currentLessonName = ref('')
 

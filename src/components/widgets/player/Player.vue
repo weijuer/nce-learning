@@ -169,57 +169,14 @@
             </div>
           </div>
 
-          <!-- 设置面板 -->
-          <div class="settings-panel">
-            <h3 class="panel-title">训练设置</h3>
-            <div class="settings-grid">
-              <label class="setting-row">
-                <input type="checkbox" v-model="settings.enableSentenceLoop" />
-                <span>句子循环播放</span>
-              </label>
-              <div v-if="settings.enableSentenceLoop" class="setting-row">
-                <span>循环次数:</span>
-                <select v-model="settings.sentenceLoopCount">
-                  <option :value="1">1次</option>
-                  <option :value="2">2次</option>
-                  <option :value="3">3次</option>
-                  <option :value="5">5次</option>
-                </select>
-              </div>
-              <label v-if="settings.enableSentenceLoop" class="setting-row">
-                <input type="checkbox" v-model="settings.continueAfterLoop" />
-                <span>循环后继续播放</span>
-              </label>
-              <label class="setting-row">
-                <input type="checkbox" v-model="blindListening" />
-                <span>盲听模式隐藏字幕</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- 缓存状态 -->
-          <div class="cache-panel">
-            <h3 class="panel-title">缓存状态</h3>
-            <div class="cache-info">
-              <div class="cache-item">
-                <span class="cache-label">已缓存:</span>
-                <span class="cache-value">{{ formatFileSize(cacheStats.usedSize) }}</span>
-              </div>
-              <div class="cache-item">
-                <span class="cache-label">缓存限制:</span>
-                <span class="cache-value">{{ formatFileSize(cacheStats.maxSize) }}</span>
-              </div>
-              <div class="cache-item">
-                <span class="cache-label">文件数量:</span>
-                <span class="cache-value">{{ cacheStats.fileCount }}</span>
-              </div>
-              <div class="cache-item">
-                <span class="cache-label">资源状态:</span>
-                <span class="cache-value">{{ resourceStatusText }}</span>
-              </div>
-              <button class="clear-cache-btn" @click="clearCache">清空缓存</button>
-            </div>
-          </div>
+          <!-- 设置按钮 -->
+          <button class="settings-btn" @click="showSettings = true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>设置</span>
+          </button>
 
           <div class="progress-panel">
             <h3 class="panel-title">学习进度</h3>
@@ -452,12 +409,110 @@
           </button>
         </div>
       </div>
+
+      <!-- 设置抽屉 -->
+      <w-drawer
+        v-model="showSettings"
+        position="right"
+        width="clamp(280px, 80vw, 400px)"
+        title="播放器设置"
+        getContainer="body"
+        close-on-click-overlay
+      >
+        <div class="settings-content">
+          <!-- 训练设置 -->
+          <section class="settings-section">
+            <h3 class="settings-section-title">训练设置</h3>
+            <label class="settings-item">
+              <input type="checkbox" v-model="settings.enableSentenceLoop" />
+              <span>句子循环播放</span>
+            </label>
+            <div v-if="settings.enableSentenceLoop" class="settings-item">
+              <span>循环次数:</span>
+              <select v-model="settings.sentenceLoopCount">
+                <option :value="1">1次</option>
+                <option :value="2">2次</option>
+                <option :value="3">3次</option>
+                <option :value="5">5次</option>
+              </select>
+            </div>
+            <label v-if="settings.enableSentenceLoop" class="settings-item">
+              <input type="checkbox" v-model="settings.continueAfterLoop" />
+              <span>循环后继续播放</span>
+            </label>
+            <label class="settings-item">
+              <input type="checkbox" v-model="blindListening" />
+              <span>盲听模式隐藏字幕</span>
+            </label>
+          </section>
+
+          <!-- 缓存管理 -->
+          <section class="settings-section">
+            <h3 class="settings-section-title">缓存管理</h3>
+            <div class="settings-item">
+              <span class="settings-label">已缓存:</span>
+              <span class="settings-value">{{ formatFileSize(cacheStats.usedSize) }}</span>
+            </div>
+            <div class="settings-item">
+              <span class="settings-label">缓存限制:</span>
+              <span class="settings-value">{{ formatFileSize(cacheStats.maxSize) }}</span>
+            </div>
+            <div class="settings-item">
+              <span class="settings-label">文件数量:</span>
+              <span class="settings-value">{{ cacheStats.fileCount }}</span>
+            </div>
+            <div class="settings-item">
+              <span class="settings-label">资源状态:</span>
+              <span class="settings-value">{{ resourceStatusText }}</span>
+            </div>
+            <button class="clear-cache-btn" @click="clearCache">清空缓存</button>
+          </section>
+
+          <!-- 快捷键说明 -->
+          <section class="settings-section">
+            <h3 class="settings-section-title">快捷键</h3>
+            <div class="shortcuts-list">
+              <div class="shortcut-item">
+                <kbd>空格</kbd>
+                <span>播放/暂停</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>←</kbd>
+                <kbd>→</kbd>
+                <span>上一课/下一课</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>↑</kbd>
+                <kbd>↓</kbd>
+                <span>音量增减</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>M</kbd>
+                <span>静音切换</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>R</kbd>
+                <span>切换播放速度</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>Home</kbd>
+                <span>跳到开头</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>End</kbd>
+                <span>跳到末尾</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </w-drawer>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { WDrawer } from '@/components/layouts'
 import { useStreamingPlayer } from 'Composables/useStreamingPlayer'
 import { scoreTextSimilarity, type LearningMode, useLearningProgress } from '@/composables/useLearningProgress'
 
@@ -473,6 +528,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const playbackRates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 const showSpeedMenu = ref(false)
+const showSettings = ref(false)
 const studyMode = ref<LearningMode>('listening')
 const blindListening = ref(false)
 const dictationText = ref('')
@@ -1272,6 +1328,32 @@ onUnmounted(() => {
   gap: 4px;
 }
 
+/* 设置按钮 */
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--player-surface);
+  border: 1px solid var(--player-border);
+  border-radius: clamp(12px, 2vw, 16px);
+  color: var(--player-text);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--player-surface-hover);
+    border-color: var(--player-accent);
+    color: var(--player-accent);
+  }
+
+  span {
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+}
+
 .album-version {
   display: inline-block;
   font-size: clamp(0.7rem, 1.2vw, 0.8rem);
@@ -1872,6 +1954,122 @@ onUnmounted(() => {
   }
   50% {
     transform: scaleY(1);
+  }
+}
+
+/* ===== 设置抽屉内容样式 ===== */
+.settings-content {
+  padding: 16px 0;
+  color: var(--color-text);
+}
+
+.settings-section {
+  padding: 0 16px;
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.settings-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 0.9rem;
+  color: var(--color-text-dim);
+
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+  }
+
+  select {
+    padding: 6px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.85rem;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 1px;
+    }
+  }
+}
+
+.settings-label {
+  color: var(--color-text-dim);
+}
+
+.settings-value {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.settings-content .clear-cache-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--w-color-danger) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--w-color-danger) 30%, transparent);
+  border-radius: 8px;
+  color: var(--w-color-danger);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: color-mix(in srgb, var(--w-color-danger) 25%, transparent);
+  }
+}
+
+/* 快捷键列表 */
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: var(--color-text);
+    box-shadow: var(--w-shadow-sm);
+  }
+
+  span {
+    flex: 1;
   }
 }
 </style>

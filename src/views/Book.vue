@@ -4,7 +4,7 @@ import { WTabs, WTab, WDrawer } from '@/components/layouts'
 import { Player, MiniPlayer } from 'Widgets'
 
 import { NCE_JSON } from '@/utils/nce-data'
-import { usePlayer } from 'Composables/usePlayer'
+import { useStreamingPlayer } from 'Composables/useStreamingPlayer'
 import { useLearningProgress } from '@/composables/useLearningProgress'
 import { buildLessonGroups, getLessonTitle } from '@/utils/lesson-library'
 
@@ -20,8 +20,6 @@ const state = reactive({
 
 const showMiniPlayer = ref(false)
 const hasPlayHistory = ref(false)
-const selectedLevel = ref('all')
-const selectedTheme = ref('all')
 const searchText = ref('')
 
 const levelMeta = {
@@ -36,14 +34,14 @@ const themeRules = [
   { id: 'story', label: '故事叙事', pattern: /story|dream|ghost|alibi|escape|mine|murder|puma|titanic|island|gangster/i },
   { id: 'culture', label: '文化社会', pattern: /education|industry|banks|culture|government|sporting|old|youth|city|press/i },
   { id: 'science', label: '科学自然', pattern: /volcanoes|hubble|sound|space|noise|river|bats|fossil|snake|earth|electric|bridge/i },
-  { id: 'general', label: '综合能力', pattern: /$a/ }
+  { id: 'general', label: '综合能力', pattern: /./ }
 ]
 
 const {
   isPlaying,
   currentTime,
   loadLesson
-} = usePlayer()
+} = useStreamingPlayer()
 
 const {
   averagePronunciationScore,
@@ -59,20 +57,20 @@ const getThemeLabel = (themeId: string) => {
   return themeRules.find(rule => rule.id === themeId)?.label || '综合'
 }
 
-const lessonLibrary = computed(() => {
-  return buildLessonGroups(books.value, {
-    selectedLevel: selectedLevel.value,
-    selectedTheme: selectedTheme.value,
+const lessonLibrary = computed(() => buildLessonGroups(books.value, {
     searchText: searchText.value,
     levelMeta,
     themeRules,
     getProgress
-  })
-})
+  }))
 
 const flattenedLessons = computed(() => lessonLibrary.value.lessons)
 
 const groupedLessons = computed(() => lessonLibrary.value.groups)
+
+const hasSearchResults = computed(() => lessonLibrary.value.hasResults)
+
+const hasSearchText = computed(() => searchText.value.trim().length > 0)
 
 const dailyGoalPercent = computed(() => {
   const goalSeconds = settings.value.dailyGoalMinutes * 60
@@ -112,13 +110,7 @@ watch(isPlaying, (playing) => {
   }
 })
 
-watch(selectedLevel, level => {
-  updateSettings({ preferredLevel: level })
-})
 
-watch(selectedTheme, theme => {
-  updateSettings({ preferredTheme: theme })
-})
 </script>
 
 <template>
@@ -159,16 +151,6 @@ watch(selectedTheme, theme => {
 
     <section class="library-toolbar" aria-label="内容筛选">
       <input v-model="searchText" type="search" placeholder="搜索课程标题或编号" />
-      <select v-model="selectedLevel" aria-label="难度筛选">
-        <option value="all">全部难度</option>
-        <option v-for="(_, version) in books" :key="version" :value="version">
-          {{ version }} · {{ levelMeta[version as keyof typeof levelMeta]?.label }}
-        </option>
-      </select>
-      <select v-model="selectedTheme" aria-label="主题筛选">
-        <option value="all">全部主题</option>
-        <option v-for="theme in themeRules" :key="theme.id" :value="theme.id">{{ theme.label }}</option>
-      </select>
       <label class="sync-toggle">
         <input
           type="checkbox"
@@ -186,7 +168,31 @@ watch(selectedTheme, theme => {
         :title="folderName"
         :name="folderName"
       >
-        <div class="lesssons">
+        <!-- 无搜索结果提示 -->
+        <div v-if="hasSearchText && !hasSearchResults" class="no-results">
+          <div class="no-results-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <p class="no-results-text">未找到匹配的课程</p>
+          <p class="no-results-hint">尝试其他关键词或清除搜索</p>
+        </div>
+
+        <!-- 无内容提示 -->
+        <div v-else-if="!groupedLessons[folderName]?.length" class="no-results">
+          <div class="no-results-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+          </div>
+          <p class="no-results-text">此版本暂无课程</p>
+        </div>
+
+        <!-- 课程列表 -->
+        <div v-else class="lesssons">
           <div
             v-for="course in groupedLessons[folderName]"
             :key="course.fileName"
@@ -322,7 +328,7 @@ watch(selectedTheme, theme => {
 
   .library-toolbar {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(140px, 180px)) auto;
+    grid-template-columns: minmax(180px, 1fr) auto;
     gap: 0.75rem;
     align-items: center;
 
@@ -419,6 +425,34 @@ watch(selectedTheme, theme => {
         justify-content: start;
         flex-wrap: wrap;
       }
+    }
+  }
+
+  .no-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    text-align: center;
+
+    .no-results-icon {
+      color: var(--color-text-dim);
+      opacity: 0.5;
+      margin-bottom: 1rem;
+    }
+
+    .no-results-text {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--color-text);
+    }
+
+    .no-results-hint {
+      margin: 0.5rem 0 0;
+      font-size: 0.9rem;
+      color: var(--color-text-dim);
     }
   }
 }

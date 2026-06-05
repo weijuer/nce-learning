@@ -1,6 +1,10 @@
 <script name="Home" setup lang="ts">
 import { useRouter } from 'vue-router'
 
+defineOptions({
+  name: 'Home'
+})
+
 const router = useRouter()
 
 const goGetStarted = () => {

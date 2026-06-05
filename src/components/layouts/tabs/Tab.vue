@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, inject, onUnmounted, ref } from 'vue'
 import type { TabsProvider } from './Tabs.vue'
 
 export interface Tab {
@@ -36,14 +36,14 @@ const props = defineProps({
 const tabs = inject<TabsProvider>('w-tabs', {
   activeIndex: ref(0),
   tabs: ref([]),
-  registerTab: () => {}
+  registerTab: () => {},
+  unregisterTab: () => {}
 })
 
 if (!tabs) {
   throw new Error('Tab must be used within Tabs')
 }
 
-// 注册标签页
 tabs.registerTab({
   title: props.title,
   disabled: props.disabled,
@@ -52,7 +52,10 @@ tabs.registerTab({
   count: props.count
 })
 
-// 获取当前标签页的索引
+onUnmounted(() => {
+  tabs.unregisterTab(props.name)
+})
+
 const index = computed(() => tabs.tabs.value.findIndex(tab => tab.title === props.title))
 
 const isActive = computed(() => tabs.activeIndex.value === index.value)

@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { usePlayer } from 'Composables/usePlayer'
+import { useStreamingPlayer } from 'Composables/useStreamingPlayer'
 
 const {
   isPlaying,
@@ -83,7 +83,7 @@ const {
   seek,
   setVolume,
   toggleMute
-} = usePlayer({
+} = useStreamingPlayer({
   autoplay: false,
   loop: true,
   volume: 0.7,
