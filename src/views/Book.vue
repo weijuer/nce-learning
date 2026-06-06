@@ -116,10 +116,10 @@ watch(isPlaying, (playing) => {
 <template>
   <div class="book">
     <header class="learning-hero">
-      <div>
+      <div class="learning-guide">
         <p class="eyebrow">Learning path</p>
-        <h1>今天从可理解输入开始</h1>
-        <p>按难度、主题和最近进度选择课程，听读、跟读、听写在同一个学习流里完成。</p>
+        <h1 class="title">今天从可理解输入开始</h1>
+        <p class="description">按难度、主题和最近进度选择课程，听读、跟读、听写在同一个学习流里完成。</p>
       </div>
       <button
         v-if="resumeLesson"
@@ -256,13 +256,13 @@ watch(isPlaying, (playing) => {
     gap: 1rem;
     padding-block: clamp(0.5rem, 2vw, 1rem);
 
-    h1 {
-      margin: 0;
-      font-size: clamp(1.8rem, 4vw, 3.5rem);
+    h1.title {
+      margin-block-end: 1rem;
+      font-size: clamp(1.8rem, 3vw, 3.5rem);
       line-height: 1.05;
     }
 
-    p {
+    p.description {
       max-width: 680px;
       color: var(--color-text-dim);
     }
@@ -322,7 +322,7 @@ watch(isPlaying, (playing) => {
     span {
       display: block;
       height: 100%;
-      background: #2f7d62;
+      background: var(--color-primary);
     }
   }
 
@@ -357,7 +357,7 @@ watch(isPlaying, (playing) => {
 
   .lesssons {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
     gap: clamp(0.75rem, 2vw, 1rem);
     justify-content: center;
 

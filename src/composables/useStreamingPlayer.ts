@@ -138,7 +138,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
     timeout: 30000,
     maxRetries: 3,
     retryDelay: 2000,
-    enableSentenceLoop: true,
+    enableSentenceLoop: false,
     sentenceLoopCount: 3,
     continueAfterLoop: true,
     bufferThreshold: 5,
@@ -1032,6 +1032,14 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
   const loadLesson = async (name: string, version: string) => {
     console.log('[useStreamingPlayer] loadLesson started:', { name, version })
     
+    // 彻底清理旧资源，防止残留状态干扰
+    if (isPlaying.value) {
+      pause()
+    }
+    isPlaying.value = false
+    audioBuffer.value = null
+    stopCurrentSource()
+
     if (abortController) {
       console.log('[useStreamingPlayer] Aborting previous load')
       abortController.abort()
@@ -1048,7 +1056,7 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       totalDownloadedBytes = 0
       bufferProgress.value = 0
       bufferedUntilTime = 0
-      stopCurrentSource()
+      lrcLines.value = []
 
       console.log('[useStreamingPlayer] State set to LOADING, isLoading:', isLoading.value)
 
@@ -1115,6 +1123,10 @@ function createStreamingPlayer(options: PlayerOptions): StreamingPlayerReturn {
       currentLineIndex.value = -1
       currentSentenceIndex = -1
       sentenceLoopCount = 0
+
+      // 标记音频就绪并自动播放
+      audioReady.value = true
+      play()
 
       console.log('[useStreamingPlayer] loadLesson completed successfully')
     } catch (err) {

@@ -129,12 +129,18 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
               <router-link to="/about">About</router-link>
             </li>
             <li class="split-navigation__item">
-              <button @click="toggleTheme" :class="['theme-toggle', { 'is-dark': isDark }]">
-                <svg class="icon" viewBox="0 0 1024 1024">
+              <button 
+                @click="toggleTheme" 
+                :class="['theme-toggle', { 'is-dark': isDark }]"
+                :aria-label="isDark ? '切换到亮色主题' : '切换到暗色主题'"
+                :aria-pressed="isDark"
+              >
+                <svg class="icon" viewBox="0 0 1024 1024" aria-hidden="true">
                   <path
                     d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896z m0 96a352 352 0 1 0 0 704 352 352 0 0 0 0-704z m32 64v576a288 288 0 1 1 0-576z"
                   ></path>
                 </svg>
+                <span class="sr-only">{{ isDark ? '当前：暗色主题' : '当前：亮色主题' }}</span>
               </button>
             </li>
           </ul>
@@ -389,5 +395,18 @@ const toggleTheme = (e: MouseEvent | TouchEvent) => {
 .copyright {
   display: flex;
   justify-content: center;
+}
+
+/* 屏幕阅读器专用文本 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

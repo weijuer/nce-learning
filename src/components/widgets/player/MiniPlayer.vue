@@ -96,10 +96,11 @@ const closePlayer = () => {
   left: 0;
   right: 0;
   z-index: 100;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--color-bg);
   backdrop-filter: blur(20px);
   padding: clamp(8px, 1.5vw, 12px) clamp(12px, 3vw, 24px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: calc(clamp(8px, 1.5vw, 12px) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--color-border);
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -137,7 +138,7 @@ const closePlayer = () => {
   align-items: flex-end;
   gap: 2px;
   padding: 4px;
-  background: rgba(0, 0, 0, 0.6);
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
   border-radius: 4px;
   opacity: 0;
   transition: opacity 0.3s;
@@ -149,7 +150,7 @@ const closePlayer = () => {
 
 .bar {
   width: 3px;
-  background: #2c5530;
+  background: var(--color-primary);
   border-radius: 2px;
   animation: soundWave 0.8s ease-in-out infinite;
 }
@@ -174,7 +175,7 @@ const closePlayer = () => {
 .mini-title {
   font-size: clamp(0.85rem, 1.5vw, 0.95rem);
   font-weight: 500;
-  color: #f5f5f5;
+  color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -182,7 +183,7 @@ const closePlayer = () => {
 
 .mini-time {
   font-size: clamp(0.7rem, 1.2vw, 0.8rem);
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-text-dim);
   font-variant-numeric: tabular-nums;
 }
 
@@ -195,14 +196,14 @@ const closePlayer = () => {
 
 .progress-bar {
   height: 4px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-border);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #2c5530;
+  background: var(--color-primary);
   border-radius: 2px;
   transition: width 0.1s ease;
 }
@@ -213,16 +214,17 @@ const closePlayer = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 50%;
-  color: #f5f5f5;
+  color: var(--color-text);
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.2s;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--color-primary);
+    color: var(--color-text);
     transform: scale(1.05);
   }
 }
@@ -233,21 +235,22 @@ const closePlayer = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 50%;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-text-dim);
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.2s;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.3);
-    color: #ef4444;
+    background: color-mix(in srgb, var(--w-color-danger) 20%, transparent);
+    border-color: var(--w-color-danger);
+    color: var(--w-color-danger);
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 480px) {
   .mini-progress {
     display: none;
   }

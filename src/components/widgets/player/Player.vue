@@ -84,13 +84,10 @@
             width="20"
             height="20"
             viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            fill="currentColor"
           >
-            <polyline points="15 18 9 12 15 6"></polyline>
+            <polygon points="19 20 9 12 19 4 19 20"></polygon>
+            <rect x="5" y="4" width="3" height="16"></rect>
           </svg>
         </button>
         <div class="lesson-info">
@@ -103,13 +100,10 @@
             width="20"
             height="20"
             viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            fill="currentColor"
           >
-            <polyline points="9 18 15 12 9 6"></polyline>
+            <polygon points="5 4 15 12 5 20 5 4"></polygon>
+            <rect x="16" y="4" width="3" height="16"></rect>
           </svg>
         </button>
       </div>
@@ -145,8 +139,8 @@
                   />
                   <defs>
                     <radialGradient id="playerGradient" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" style="stop-color: #2c5530" />
-                      <stop offset="100%" style="stop-color: #1a361e" />
+                      <stop offset="0%" :style="`stop-color: var(--color-primary)`" />
+                      <stop offset="100%" :style="`stop-color: var(--color-secondary)`" />
                     </radialGradient>
                   </defs>
                 </svg>
@@ -319,12 +313,10 @@
               width="20"
               height="20"
               viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+              fill="currentColor"
             >
               <polygon points="19 20 9 12 19 4 19 20"></polygon>
-              <polygon points="5 20 15 12 5 4 5 20"></polygon>
+              <rect x="5" y="4" width="3" height="16"></rect>
             </svg>
           </button>
 
@@ -358,12 +350,10 @@
               width="20"
               height="20"
               viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+              fill="currentColor"
             >
               <polygon points="5 4 15 12 5 20 5 4"></polygon>
-              <polygon points="19 4 9 12 19 20 19 4"></polygon>
+              <rect x="16" y="4" width="3" height="16"></rect>
             </svg>
           </button>
 
@@ -885,25 +875,14 @@ onUnmounted(() => {
 </script>
 
 <style>
-:root {
-  --player-primary: #2c5530;
-  --player-primary-light: #4a7c59;
-  --player-accent: #d4af37;
-  --player-text: #f5f5f5;
-  --player-text-secondary: rgba(255, 255, 255, 0.7);
-  --player-bg: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  --player-surface: rgba(255, 255, 255, 0.05);
-  --player-surface-hover: rgba(255, 255, 255, 0.1);
-  --player-border: rgba(255, 255, 255, 0.1);
-}
-
+/* Player 使用全局 CSS 变量以支持主题切换 */
 .player-container {
   position: relative;
   container-type: inline-size;
   container-name: player;
   min-height: 100%;
-  background: var(--player-bg);
-  color: var(--player-text);
+  background: var(--color-bg);
+  color: var(--color-text);
   box-sizing: border-box;
 }
 
@@ -919,11 +898,11 @@ onUnmounted(() => {
   font-size: clamp(0.75rem, 1.5vw, 0.875rem);
 
   &.offline {
-    background: #dc2626;
+    background: var(--w-color-danger);
     color: white;
   }
   &.slow {
-    background: #d97706;
+    background: var(--w-color-warning);
     color: white;
   }
 }
@@ -932,7 +911,7 @@ onUnmounted(() => {
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: color-mix(in srgb, var(--color-bg) 95%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -955,7 +934,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top: 3px solid var(--player-accent);
+  border-top: 3px solid var(--color-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -967,7 +946,7 @@ onUnmounted(() => {
 }
 
 .loading-text p {
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
 }
 
 .download-progress-container {
@@ -989,12 +968,12 @@ onUnmounted(() => {
 
 .progress-label {
   font-size: clamp(0.75rem, 1.2vw, 0.875rem);
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
 }
 
 .progress-percentage {
   font-size: clamp(0.75rem, 1.2vw, 0.875rem);
-  color: var(--player-primary-light);
+  color: var(--color-secondary);
   font-weight: 600;
 }
 
@@ -1014,17 +993,17 @@ onUnmounted(() => {
   border-radius: 3px;
 
   &.downloading {
-    background: linear-gradient(90deg, var(--player-primary), var(--player-primary-light));
+    background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
   }
   &.retrying {
-    background: linear-gradient(90deg, #d97706, #f59e0b);
+    background: linear-gradient(90deg, var(--w-color-warning), #f59e0b);
     animation: pulse 1s ease-in-out infinite;
   }
   &.completed {
-    background: #22c55e;
+    background: var(--color-primary);
   }
   &.failed {
-    background: #ef4444;
+    background: var(--w-color-danger);
   }
 }
 
@@ -1032,7 +1011,7 @@ onUnmounted(() => {
   display: block;
   margin-top: 8px;
   font-size: 0.75rem;
-  color: #d97706;
+  color: var(--w-color-warning);
 }
 
 /* ===== 缓冲状态 ===== */
@@ -1058,22 +1037,22 @@ onUnmounted(() => {
   width: 50px;
   height: 50px;
   border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top: 3px solid var(--player-accent);
+  border-top: 3px solid var(--color-accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 .buffering-text {
   font-size: 1rem;
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
 }
 
 /* ===== 错误卡片 ===== */
 .error-card {
   margin: clamp(12px, 2vw, 16px);
   padding: clamp(12px, 2vw, 16px);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: color-mix(in srgb, var(--w-color-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--w-color-danger) 30%, transparent);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -1085,16 +1064,16 @@ onUnmounted(() => {
 }
 .error-content h4 {
   font-weight: 600;
-  color: #ef4444;
+  color: var(--w-color-danger);
   margin-bottom: 4px;
 }
 .error-content p {
-  color: rgba(239, 68, 68, 0.8);
+  color: color-mix(in srgb, var(--w-color-danger) 80%, transparent);
   margin-bottom: 12px;
 }
 
 .retry-btn {
-  background: #ef4444;
+  background: var(--w-color-danger);
   color: white;
   border: none;
   padding: 8px 16px;
@@ -1130,15 +1109,15 @@ onUnmounted(() => {
   gap: 8px;
   padding: 10px clamp(12px, 3vw, 24px);
   background: rgba(0, 0, 0, 0.22);
-  border-bottom: 1px solid var(--player-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .mode-tab {
   min-height: 58px;
-  border: 1px solid var(--player-border);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.06);
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
   display: grid;
   align-content: center;
   gap: 2px;
@@ -1150,7 +1129,7 @@ onUnmounted(() => {
 
   span {
     font-weight: 700;
-    color: var(--player-text);
+    color: var(--color-text);
   }
 
   small {
@@ -1159,9 +1138,9 @@ onUnmounted(() => {
   }
 
   &.active {
-    border-color: var(--player-accent);
+    border-color: var(--color-accent);
     background: rgba(212, 175, 55, 0.16);
-    color: var(--player-accent);
+    color: var(--color-accent);
   }
 }
 
@@ -1174,7 +1153,7 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   border: none;
-  color: var(--player-text);
+  color: var(--color-text);
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
@@ -1203,7 +1182,7 @@ onUnmounted(() => {
 .lesson-badge {
   font-size: clamp(0.65rem, 1.2vw, 0.75rem);
   padding: 2px 8px;
-  background: var(--player-primary);
+  background: var(--color-primary);
   border-radius: 10px;
   flex-shrink: 0;
 }
@@ -1239,7 +1218,7 @@ onUnmounted(() => {
   align-items: center;
   gap: clamp(8px, 1.5vw, 16px);
   cursor: pointer;
-  background: var(--player-surface);
+  background: var(--color-surface);
   border-radius: clamp(12px, 2vw, 16px);
   padding: clamp(16px, 3vw, 24px);
   transition: transform 0.2s;
@@ -1306,7 +1285,7 @@ onUnmounted(() => {
 .playing-dot {
   width: 4px;
   height: 12px;
-  background: var(--player-accent);
+  background: var(--color-accent);
   border-radius: 2px;
   animation: sound-wave 0.8s ease-in-out infinite;
 
@@ -1335,17 +1314,17 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   padding: 12px;
-  background: var(--player-surface);
-  border: 1px solid var(--player-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: clamp(12px, 2vw, 16px);
-  color: var(--player-text);
+  color: var(--color-text);
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: var(--player-surface-hover);
-    border-color: var(--player-accent);
-    color: var(--player-accent);
+    background: color-mix(in srgb, var(--color-border) 50%, transparent);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
   }
 
   span {
@@ -1358,7 +1337,7 @@ onUnmounted(() => {
   display: inline-block;
   font-size: clamp(0.7rem, 1.2vw, 0.8rem);
   padding: clamp(3px, 0.5vw, 4px) clamp(8px, 1.5vw, 12px);
-  background: var(--player-primary);
+  background: var(--color-primary);
   border-radius: 12px;
 }
 
@@ -1370,14 +1349,14 @@ onUnmounted(() => {
 
 /* ===== 设置面板 ===== */
 .settings-panel {
-  background: var(--player-surface);
+  background: var(--color-surface);
   border-radius: clamp(12px, 2vw, 16px);
   padding: clamp(14px, 2.5vw, 20px);
 }
 
 .cache-panel,
 .progress-panel {
-  background: var(--player-surface);
+  background: var(--color-surface);
   border-radius: clamp(12px, 2vw, 16px);
   padding: clamp(14px, 2.5vw, 20px);
 }
@@ -1387,7 +1366,7 @@ onUnmounted(() => {
   font-weight: 600;
   margin-bottom: clamp(10px, 1.5vw, 16px);
   padding-bottom: clamp(8px, 1vw, 12px);
-  border-bottom: 1px solid var(--player-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .settings-grid {
@@ -1401,7 +1380,7 @@ onUnmounted(() => {
   align-items: center;
   gap: clamp(8px, 1.2vw, 12px);
   font-size: clamp(0.8rem, 1.3vw, 0.9rem);
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
   cursor: pointer;
 }
 
@@ -1413,10 +1392,10 @@ onUnmounted(() => {
 
 .setting-row select {
   padding: clamp(4px, 0.6vw, 6px) clamp(8px, 1.2vw, 12px);
-  border: 1px solid var(--player-border);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
-  color: var(--player-text);
+  color: var(--color-text);
   font-size: clamp(0.8rem, 1.3vw, 0.9rem);
   cursor: pointer;
 }
@@ -1434,7 +1413,7 @@ onUnmounted(() => {
 }
 
 .cache-label {
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
 }
 
 .cache-value {
@@ -1444,16 +1423,16 @@ onUnmounted(() => {
 .clear-cache-btn {
   margin-top: 12px;
   padding: 8px 16px;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: color-mix(in srgb, var(--w-color-danger) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--w-color-danger) 30%, transparent);
   border-radius: 8px;
-  color: #ef4444;
+  color: var(--w-color-danger);
   font-size: clamp(0.8rem, 1.3vw, 0.9rem);
   cursor: pointer;
   transition: background 0.2s;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.3);
+    background: color-mix(in srgb, var(--w-color-danger) 30%, transparent);
   }
 }
 
@@ -1473,7 +1452,7 @@ onUnmounted(() => {
   }
 
   span {
-    color: var(--player-text-secondary);
+    color: var(--color-text-dim);
     font-size: 0.75rem;
   }
 }
@@ -1488,7 +1467,7 @@ onUnmounted(() => {
 }
 
 .current-lyric-panel {
-  background: var(--player-surface);
+  background: var(--color-surface);
   border-radius: clamp(12px, 2vw, 16px);
   padding: clamp(20px, 4vw, 32px);
   text-align: center;
@@ -1497,7 +1476,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 
   &:hover {
-    background: var(--player-surface-hover);
+    background: color-mix(in srgb, var(--color-border) 50%, transparent);
   }
 }
 
@@ -1510,13 +1489,13 @@ onUnmounted(() => {
 
 .current-lyric-translation {
   font-size: clamp(1rem, 2.2vw, 1.25rem);
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
   font-style: italic;
 }
 
 .training-panel {
-  background: var(--player-surface);
-  border: 1px solid var(--player-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: clamp(14px, 2vw, 18px);
   display: grid;
@@ -1529,17 +1508,17 @@ onUnmounted(() => {
 
   p {
     margin: 0;
-    color: var(--player-text-secondary);
+    color: var(--color-text-dim);
   }
 
   textarea {
     width: 100%;
     min-height: 86px;
     resize: vertical;
-    border: 1px solid var(--player-border);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 0.75rem;
-    color: var(--player-text);
+    color: var(--color-text);
     background: rgba(0, 0, 0, 0.22);
     font: inherit;
   }
@@ -1549,7 +1528,7 @@ onUnmounted(() => {
     align-items: center;
 
     span {
-      color: var(--player-accent);
+      color: var(--color-accent);
       font-weight: 700;
     }
   }
@@ -1562,22 +1541,22 @@ onUnmounted(() => {
 
   button {
     min-height: 40px;
-    border: 1px solid var(--player-border);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 0 0.9rem;
-    color: var(--player-text);
+    color: var(--color-text);
     background: rgba(255, 255, 255, 0.08);
     cursor: pointer;
   }
 
   .primary-action {
-    border-color: var(--player-primary-light);
-    background: var(--player-primary);
+    border-color: var(--color-secondary);
+    background: var(--color-primary);
   }
 
   .recording {
-    border-color: #ef4444;
-    background: rgba(239, 68, 68, 0.24);
+    border-color: var(--w-color-danger);
+    background: color-mix(in srgb, var(--w-color-danger) 24%, transparent);
   }
 }
 
@@ -1591,19 +1570,19 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.18);
 
   span {
-    color: var(--player-text-secondary);
+    color: var(--color-text-dim);
     font-size: 0.78rem;
   }
 
   strong {
     min-width: 0;
-    color: var(--player-text);
+    color: var(--color-text);
     font-size: 0.9rem;
     overflow-wrap: anywhere;
   }
 
   b {
-    color: var(--player-accent);
+    color: var(--color-accent);
     font-size: 1.2rem;
   }
 }
@@ -1611,7 +1590,7 @@ onUnmounted(() => {
 .tap-hint {
   margin-top: clamp(8px, 1.5vw, 12px);
   font-size: clamp(0.8rem, 1.5vw, 0.9rem);
-  color: var(--player-accent);
+  color: var(--color-accent);
   animation: hint-pulse 2s ease-in-out infinite;
 }
 
@@ -1635,15 +1614,15 @@ onUnmounted(() => {
   margin-bottom: clamp(4px, 0.5vw, 8px);
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--player-surface);
+  background: var(--color-surface);
 
   &:hover {
-    background: var(--player-surface-hover);
+    background: color-mix(in srgb, var(--color-border) 50%, transparent);
   }
 
   &.active {
     background: rgba(44, 85, 48, 0.3);
-    border-left: 3px solid var(--player-accent);
+    border-left: 3px solid var(--color-accent);
     padding-left: calc(clamp(12px, 2vw, 16px) - 3px);
   }
 }
@@ -1656,7 +1635,7 @@ onUnmounted(() => {
 
 .lyric-zh {
   font-size: clamp(0.8rem, 1.6vw, 0.9rem);
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
   line-height: 1.4;
 }
 
@@ -1665,7 +1644,7 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(20px);
   padding: clamp(10px, 2vw, 16px);
-  border-top: 1px solid var(--player-border);
+  border-top: 1px solid var(--color-border);
   position: sticky;
   bottom: 0;
 }
@@ -1679,7 +1658,7 @@ onUnmounted(() => {
 
 .time-display {
   font-size: clamp(0.75rem, 1.2vw, 0.875rem);
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
   min-width: 40px;
   text-align: center;
 }
@@ -1713,7 +1692,7 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   height: 100%;
-  background: linear-gradient(90deg, var(--player-primary), var(--player-accent));
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
   border-radius: 3px;
   transition: width 0.1s linear;
 }
@@ -1750,13 +1729,13 @@ onUnmounted(() => {
   justify-content: center;
   background: transparent;
   border: none;
-  color: var(--player-text);
+  color: var(--color-text);
   cursor: pointer;
   transition: all 0.2s;
   gap: 4px;
 
   &:hover:not(:disabled) {
-    color: var(--player-accent);
+    color: var(--color-accent);
   }
   &:active:not(:disabled) {
     transform: scale(0.95);
@@ -1777,7 +1756,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--player-primary);
+  background: var(--color-primary);
   border-radius: 50%;
   border: none;
   color: white;
@@ -1786,7 +1765,7 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(44, 85, 48, 0.4);
 
   &:hover {
-    background: var(--player-primary-light);
+    background: var(--color-secondary);
     transform: scale(1.05);
   }
   &:active {
@@ -1849,7 +1828,7 @@ onUnmounted(() => {
   padding: 8px 16px;
   background: transparent;
   border: none;
-  color: var(--player-text-secondary);
+  color: var(--color-text-dim);
   font-size: 0.875rem;
   cursor: pointer;
   border-radius: 4px;
@@ -1858,11 +1837,11 @@ onUnmounted(() => {
 
   &:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: var(--player-text);
+    color: var(--color-text);
   }
 
   &.active {
-    background: var(--player-primary);
+    background: var(--color-primary);
     color: white;
   }
 }
