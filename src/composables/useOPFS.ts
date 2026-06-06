@@ -1,4 +1,5 @@
 import { ref, onUnmounted } from 'vue'
+import FileWorker from '../workers/file-worker.ts?worker'
 
 export interface CachedFileInfo {
   name: string
@@ -18,11 +19,9 @@ export function useOPFS() {
 
   function getWorker(): Worker {
     if (!worker.value) {
-      const workerUrl = new URL('../workers/file-worker.ts', import.meta.url)
-      worker.value = new Worker(workerUrl, { type: 'module' })
+      worker.value = new FileWorker()
       
-      const currentWorker = worker.value
-      currentWorker.onmessage = (e: MessageEvent) => {
+      worker.value.onmessage = (e: MessageEvent) => {
         const { type, payload } = e.data
         const requestId = payload.requestId
         const resolveRequest = (value: any) => {
@@ -68,7 +67,6 @@ export function useOPFS() {
             reject(new Error(payload.message))
             pendingRejects.delete(reqId)
           }
-          // 也尝试调用 resolve 以防 reject 不存在
           const resolve = pending.get(reqId)
           if (resolve) {
             resolve(null)
@@ -77,7 +75,7 @@ export function useOPFS() {
         }
       }
 
-      currentWorker.onerror = (err) => {
+      worker.value.onerror = (err) => {
         console.error('[useOPFS] Worker error:', err)
       }
     }
